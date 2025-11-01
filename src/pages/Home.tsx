@@ -1,5 +1,12 @@
 // src/pages/Home.tsx
-import { CloudUpload, Dashboard as DashboardIcon, ExpandMore, Logout, School, Settings } from "@mui/icons-material";
+import {
+  CloudUpload,
+  Dashboard as DashboardIcon,
+  ExpandMore,
+  Logout,
+  School,
+  Settings,
+} from "@mui/icons-material";
 import {
   Accordion,
   AccordionDetails,
@@ -57,7 +64,9 @@ export const Home: React.FC = () => {
             </Typography>
           </Box>
           <Avatar src={user?.avatar} sx={{ mr: 2 }} />
-          <Typography sx={{ mr: 2, display: { xs: "none", sm: "block" } }}>{user?.firstName}</Typography>
+          <Typography sx={{ mr: 2, display: { xs: "none", sm: "block" } }}>
+            {user?.firstName}
+          </Typography>
           <IconButton color="inherit" onClick={logout}>
             <Logout />
           </IconButton>
@@ -76,7 +85,13 @@ export const Home: React.FC = () => {
 
               <Grid container spacing={2}>
                 <Grid item xs={6}>
-                  <TextField select fullWidth label="Môn học" name="subject" value={examForm.subject} onChange={handleInputChange}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Môn học"
+                    name="subject"
+                    value={examForm.subject}
+                    onChange={handleInputChange}>
                     {subjects.map((subject) => (
                       <MenuItem key={subject.value} value={subject.value}>
                         {subject.label}
@@ -85,7 +100,13 @@ export const Home: React.FC = () => {
                   </TextField>
                 </Grid>
                 <Grid item xs={6}>
-                  <TextField select fullWidth label="Lớp" name="grade" value={examForm.grade} onChange={handleInputChange}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Lớp"
+                    name="grade"
+                    value={examForm.grade}
+                    onChange={handleInputChange}>
                     <MenuItem value="10">Lớp 10</MenuItem>
                     <MenuItem value="11">Lớp 11</MenuItem>
                     <MenuItem value="12">Lớp 12</MenuItem>
@@ -103,7 +124,13 @@ export const Home: React.FC = () => {
                   />
                 </Grid>
                 <Grid item xs={6}>
-                  <TextField select fullWidth label="Mức độ" name="difficulty" value={examForm.difficulty} onChange={handleInputChange}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Mức độ"
+                    name="difficulty"
+                    value={examForm.difficulty}
+                    onChange={handleInputChange}>
                     <MenuItem value="nhận biết">Nhận biết</MenuItem>
                     <MenuItem value="thông hiểu">Thông hiểu</MenuItem>
                     <MenuItem value="vận dụng">Vận dụng</MenuItem>
@@ -119,7 +146,12 @@ export const Home: React.FC = () => {
                 <Typography>Tùy chọn nâng cao</Typography>
               </AccordionSummary>
               <AccordionDetails>
-                <TextField fullWidth label="Tên đề thi" placeholder="VD: Kiểm tra 15 phút - Chương 1" sx={{ mb: 2 }} />
+                <TextField
+                  fullWidth
+                  label="Tên đề thi"
+                  placeholder="VD: Kiểm tra 15 phút - Chương 1"
+                  sx={{ mb: 2 }}
+                />
                 <Button variant="outlined" component="label" startIcon={<CloudUpload />} fullWidth>
                   Tải lên tài liệu
                   <input type="file" hidden multiple />
@@ -128,7 +160,12 @@ export const Home: React.FC = () => {
             </Accordion>
 
             {/* Generate Button */}
-            <Button variant="contained" color="success" size="large" fullWidth onClick={handleGenerate}>
+            <Button
+              variant="contained"
+              color="success"
+              size="large"
+              fullWidth
+              onClick={handleGenerate}>
               🎯 Tạo đề thi
             </Button>
           </Grid>
@@ -147,8 +184,7 @@ export const Home: React.FC = () => {
                   p: 8,
                   textAlign: "center",
                   color: "text.secondary",
-                }}
-              >
+                }}>
                 <Typography variant="h4" gutterBottom>
                   📋
                 </Typography>

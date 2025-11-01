@@ -1,14 +1,13 @@
-import * as React from "react"
-import { ChevronDownIcon } from "lucide-react"
+import { ChevronDownIcon } from "lucide-react";
+import * as React from "react";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
 function NativeSelect({ className, ...props }: React.ComponentProps<"select">) {
   return (
     <div
       className="group/native-select relative w-fit has-[select:disabled]:opacity-50"
-      data-slot="native-select-wrapper"
-    >
+      data-slot="native-select-wrapper">
       <select
         data-slot="native-select"
         className={cn(
@@ -25,24 +24,15 @@ function NativeSelect({ className, ...props }: React.ComponentProps<"select">) {
         data-slot="native-select-icon"
       />
     </div>
-  )
+  );
 }
 
 function NativeSelectOption({ ...props }: React.ComponentProps<"option">) {
-  return <option data-slot="native-select-option" {...props} />
+  return <option data-slot="native-select-option" {...props} />;
 }
 
-function NativeSelectOptGroup({
-  className,
-  ...props
-}: React.ComponentProps<"optgroup">) {
-  return (
-    <optgroup
-      data-slot="native-select-optgroup"
-      className={cn(className)}
-      {...props}
-    />
-  )
+function NativeSelectOptGroup({ className, ...props }: React.ComponentProps<"optgroup">) {
+  return <optgroup data-slot="native-select-optgroup" className={cn(className)} {...props} />;
 }
 
-export { NativeSelect, NativeSelectOptGroup, NativeSelectOption }
+export { NativeSelect, NativeSelectOptGroup, NativeSelectOption };
