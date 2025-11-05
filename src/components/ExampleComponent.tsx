@@ -1,29 +1,36 @@
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Download, Settings, User } from "lucide-react"
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Download, Settings, User } from "lucide-react";
 
 /**
  * Example component demonstrating the use of:
  * - shadcn/ui components (Button, Card, Input, Label, Tabs)
  * - Lucide React icons
- * 
+ *
  * This is a reference implementation showing how to use the installed libraries.
  */
 export function ExampleComponent() {
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-8">
+    <div className="mx-auto max-w-4xl space-y-8 p-8">
       <h1 className="text-3xl font-bold">Library Examples</h1>
-      
+
       {/* Example: shadcn/ui Tabs */}
       <Tabs defaultValue="account" className="w-full">
         <TabsList>
           <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="account">
           <Card>
             <CardHeader>
@@ -31,9 +38,7 @@ export function ExampleComponent() {
                 <User className="h-5 w-5" />
                 Account Information
               </CardTitle>
-              <CardDescription>
-                Manage your account details here.
-              </CardDescription>
+              <CardDescription>Manage your account details here.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -53,7 +58,7 @@ export function ExampleComponent() {
             </CardFooter>
           </Card>
         </TabsContent>
-        
+
         <TabsContent value="settings">
           <Card>
             <CardHeader>
@@ -61,14 +66,10 @@ export function ExampleComponent() {
                 <Settings className="h-5 w-5" />
                 Settings
               </CardTitle>
-              <CardDescription>
-                Configure your application settings.
-              </CardDescription>
+              <CardDescription>Configure your application settings.</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Settings configuration goes here.
-              </p>
+              <p className="text-muted-foreground text-sm">Settings configuration goes here.</p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -90,5 +91,5 @@ export function ExampleComponent() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

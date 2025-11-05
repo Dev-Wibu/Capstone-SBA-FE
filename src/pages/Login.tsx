@@ -1,6 +1,16 @@
 // src/pages/Login.tsx
 import { LockOutlined } from "@mui/icons-material";
-import { Alert, Box, Button, Card, CardContent, Container, Paper, TextField, Typography } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Container,
+  Paper,
+  TextField,
+  Typography,
+} from "@mui/material";
 import React, { useState } from "react";
 import { useAuthStore } from "../stores/authStore";
 
@@ -52,7 +62,12 @@ export const Login: React.FC = () => {
             onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
             required
           />
-          <Button type="submit" fullWidth variant="contained" sx={{ mt: 3, mb: 2 }} disabled={isLoading}>
+          <Button
+            type="submit"
+            fullWidth
+            variant="contained"
+            sx={{ mt: 3, mb: 2 }}
+            disabled={isLoading}>
             {isLoading ? "Signing in..." : "Sign In"}
           </Button>
         </Box>
