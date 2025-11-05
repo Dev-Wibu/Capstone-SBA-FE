@@ -9,6 +9,7 @@ import SubmitPage from './pages/SubmitPage';
 import ReviewPage from './pages/ReviewPage';
 import SchedulePage from './pages/SchedulePage';
 import MentorResourcesPage from './pages/MentorResourcesPage';
+import ProposalHistoryPage from './pages/ProposalHistoryPage';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
             <Route path="/review" element={<ReviewPage />} />
             <Route path="/resources" element={<MentorResourcesPage />} />
             <Route path="/schedule" element={<SchedulePage />} />
+            <Route path="/proposal-history/:id" element={<ProposalHistoryPage />} />
           </Route>
           
           <Route path="*" element={<Navigate to="/" replace />} />
