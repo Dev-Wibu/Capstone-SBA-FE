@@ -1,76 +1,87 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  role: 'mentor' | 'student';
-}
+import type { User, LoginRequest } from '@/interfaces';
+import * as authService from '@/services/authService';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string, role: 'mentor' | 'student') => Promise<void>;
+  login: (credentials: LoginRequest) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    // Kiểm tra localStorage khi khởi tạo
-    const savedUser = localStorage.getItem('user');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const login = async (email: string, _password: string) => {
-    try {
-      // TODO: Thay thế bằng API call thực tế
-      // Giả lập API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock user data
-      const mockUser: User = {
-        id: '1',
-        email: email,
-        name: email.split('@')[0],
-        role: 'mentor'
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
-      localStorage.setItem('token', 'mock-jwt-token');
-    } catch (error) {
-      throw new Error('Đăng nhập thất bại');
+  // Khôi phục user từ localStorage khi app khởi động
+  useEffect(() => {
+    const storedUser = authService.getStoredUser();
+    const token = authService.getAccessToken();
+    
+    if (storedUser && token) {
+      setUser(storedUser);
     }
-  };
+    
+    setIsLoading(false);
+  }, []);
 
-  const register = async (email: string, _password: string, name: string, role: 'mentor' | 'student') => {
+  const login = async (credentials: LoginRequest) => {
     try {
-      // TODO: Thay thế bằng API call thực tế
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('🔐 [AUTH] Starting login with credentials:', { email: credentials.email });
       
-      const mockUser: User = {
-        id: Date.now().toString(),
-        email,
-        name,
-        role
-      };
+      // Bước 1: Login để lấy tokens
+      const loginResponse = await authService.login(credentials);
+      console.log('✅ [AUTH] Login successful, received tokens:', {
+        hasAccessToken: !!loginResponse.accessToken,
+        hasRefreshToken: !!loginResponse.refreshToken
+      });
       
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
-      localStorage.setItem('token', 'mock-jwt-token');
-    } catch (error) {
-      throw new Error('Đăng ký thất bại');
+      // Bước 2: Fetch profile để lấy thông tin user
+      console.log('👤 [AUTH] Fetching user profile...');
+      const userData = await authService.fetchProfile();
+      console.log('✅ [AUTH] Profile fetched successfully:', {
+        id: userData.id,
+        email: userData.email,
+        role: userData.role,
+        fullName: userData.fullName
+      });
+      
+      // Bước 3: Cập nhật state
+      setUser(userData);
+      console.log('✅ [AUTH] Login flow completed successfully');
+    } catch (error: any) {
+      console.error('❌ [AUTH] Login error:', error);
+      console.error('❌ [AUTH] Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        headers: error.response?.headers,
+        config: {
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+          method: error.config?.method
+        }
+      });
+      
+      // Xóa tokens nếu có lỗi
+      authService.logout();
+      
+      // Xử lý thông báo lỗi theo status code
+      if (error.response?.status === 400) {
+        throw new Error('Email hoặc mật khẩu không đúng');
+      }
+      throw new Error(error.response?.data?.message || 'Đăng nhập thất bại');
     }
   };
 
   const logout = () => {
+    authService.logout();
     setUser(null);
-    localStorage.removeItem('user');
-    localStorage.removeItem('token');
   };
 
   return (
@@ -78,9 +89,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       value={{ 
         user, 
         login, 
-        register, 
         logout, 
-        isAuthenticated: !!user 
+        isAuthenticated: !!user,
+        isLoading
       }}
     >
       {children}

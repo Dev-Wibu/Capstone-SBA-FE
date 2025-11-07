@@ -31,19 +31,45 @@ Hệ thống quản lý và kiểm tra đồ án sinh viên với tính năng ph
 
 ```
 src/
+├── assets/                     # Static assets (images, icons)
 ├── components/
 │   ├── Layout.tsx              # Layout wrapper với Navbar
-│   ├── Navbar.tsx              # Navigation bar với 3 menu
-│   └── ProtectedRoute.tsx      # Component bảo vệ route
+│   ├── Navbar.tsx              # Navigation bar
+│   ├── ProtectedRoute.tsx      # Component bảo vệ route cần auth
+│   ├── RoleBasedRoute.tsx      # Component phân quyền theo role
+│   └── ui/                     # Shadcn/ui components
 ├── contexts/
 │   └── AuthContext.tsx         # Context quản lý authentication
+├── hooks/
+│   └── use-toast.ts            # Toast notification hook
+├── interfaces/
+│   └── index.ts                # TypeScript interfaces & types
+├── lib/
+│   └── utils.ts                # Utility functions
 ├── pages/
-│   ├── LoginPage.tsx           # Trang đăng nhập (màu cam)
-│   ├── RegisterPage.tsx        # Trang đăng ký (màu cam)
-│   ├── HomePage.tsx            # Trang chủ - Dashboard
-│   ├── SubmitPage.tsx          # Trang nộp đề tài (sinh viên)
-│   ├── ReviewPage.tsx          # Trang duyệt đề tài (mentor)
-│   └── SchedulePage.tsx        # Trang lịch đồ án
+│   ├── auth/                   # 🔐 Authentication pages
+│   │   ├── LoginPage.tsx       # Trang đăng nhập
+│   │   ├── RegisterPage.tsx    # Trang đăng ký
+│   │   └── index.ts            # Exports
+│   ├── admin/                  # 👨‍💼 Admin pages
+│   │   ├── AdminPage.tsx       # Duyệt đề tài cuối cùng
+│   │   ├── AllProposalsPage.tsx # Xem tất cả proposals
+│   │   └── index.ts            # Exports
+│   ├── mentor/                 # 👨‍🏫 Mentor/Lecturer pages
+│   │   ├── HomePage.tsx        # Dashboard cho mentor
+│   │   ├── SubmitPage.tsx      # Nộp đề tài
+│   │   ├── MentorResourcesPage.tsx # Tài nguyên
+│   │   ├── SchedulePage.tsx    # Lịch đồ án
+│   │   └── index.ts            # Exports
+│   ├── shared/                 # 🔄 Shared pages (all roles)
+│   │   ├── ProposalHistoryPage.tsx # Xem lịch sử proposal
+│   │   └── index.ts            # Exports
+│   └── index.ts                # Main export file
+├── services/
+│   ├── api.ts                  # API client & endpoints
+│   └── authService.ts          # Authentication service
+├── stores/
+│   └── exampleStore.ts         # State management (nếu cần)
 ├── App.tsx                     # Main App với routing
 └── main.tsx                    # Entry point
 ```

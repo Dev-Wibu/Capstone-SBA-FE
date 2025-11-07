@@ -1,4 +1,4 @@
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const HomePage = () => {
@@ -12,19 +12,21 @@ const HomePage = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-4xl font-bold mb-2">
-              Xin chào, {user?.name}! 👋
+              Xin chào, {user?.fullName}! 👋
             </h1>
             <p className="text-orange-100 text-lg">
-              {user?.role === 'mentor' 
-                ? 'Chào mừng đến với hệ thống quản lý đồ án' 
-                : 'Chúc bạn một ngày làm việc hiệu quả!'}
+              Chào mừng đến với hệ thống quản lý đồ án
             </p>
             <div className="flex items-center mt-4 space-x-4">
               <div className="flex items-center bg-white/20 px-4 py-2 rounded-lg">
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
-                <span className="font-medium">{user?.role === 'mentor' ? 'Mentor' : 'Sinh viên'}</span>
+                <span className="font-medium">
+                  {user?.role === 'MENTOR' && 'Mentor'}
+                  {user?.role === 'LECTURER' && 'Giảng viên'}
+                  {user?.role === 'ADMIN' && 'Quản trị viên'}
+                </span>
               </div>
               <div className="flex items-center bg-white/20 px-4 py-2 rounded-lg">
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -112,39 +114,20 @@ const HomePage = () => {
             Thao tác nhanh
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {user?.role === 'student' && (
-              <button
-                onClick={() => navigate('/submit')}
-                className="bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-l-4 border-orange-500 text-left group"
-              >
-                <div className="flex items-center mb-3">
-                  <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center group-hover:bg-orange-500 transition-colors">
-                    <svg className="w-6 h-6 text-orange-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                  </div>
+            <button
+              onClick={() => navigate('/submit')}
+              className="bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-l-4 border-orange-500 text-left group"
+            >
+              <div className="flex items-center mb-3">
+                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center group-hover:bg-orange-500 transition-colors">
+                  <svg className="w-6 h-6 text-orange-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-1">Nộp đề tài</h3>
-                <p className="text-sm text-gray-600">Tải lên đồ án mới</p>
-              </button>
-            )}
-            
-            {user?.role === 'mentor' && (
-              <button
-                onClick={() => navigate('/review')}
-                className="bg-white p-6 rounded-xl shadow-md hover:shadow-xl transition-all border-l-4 border-orange-500 text-left group"
-              >
-                <div className="flex items-center mb-3">
-                  <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center group-hover:bg-orange-500 transition-colors">
-                    <svg className="w-6 h-6 text-orange-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-1">Duyệt đề tài</h3>
-                <p className="text-sm text-gray-600">Xem xét đồ án</p>
-              </button>
-            )}
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">Nộp đề tài</h3>
+              <p className="text-sm text-gray-600">Tải lên đồ án mới</p>
+            </button>
             
             <button
               onClick={() => navigate('/resources')}

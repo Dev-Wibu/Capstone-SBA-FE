@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -17,10 +17,23 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      await login(email, password);
-      navigate('/');
-    } catch (err) {
-      setError('Email hoặc mật khẩu không đúng');
+      await login({ email, password });
+      
+      // Lấy user data từ localStorage để redirect theo role
+      const userData = JSON.parse(localStorage.getItem('user') || '{}');
+      
+      // Role-based routing
+      if (userData.role === 'ADMIN') {
+        navigate('/admin');
+      } else if (userData.role === 'MENTOR' || userData.role === 'LECTURER') {
+        navigate('/');
+      } else {
+        // Default về trang chủ
+        navigate('/');
+      }
+    } catch (err: any) {
+      // Hiển thị thông báo lỗi từ AuthContext
+      setError(err.message);
     } finally {
       setLoading(false);
     }

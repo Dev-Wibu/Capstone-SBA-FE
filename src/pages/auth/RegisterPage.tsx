@@ -1,43 +1,19 @@
 import { useState } from 'react';
-import type { FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { Link } from 'react-router-dom';
 
 const RegisterPage = () => {
+  // TODO: Implement register functionality when backend is ready
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [name, setName] = useState('');
   const [role, setRole] = useState<'mentor' | 'student'>('student');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
-  const navigate = useNavigate();
+  const [error, setError] = useState('');
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-
-    if (password !== confirmPassword) {
-      setError('Mật khẩu xác nhận không khớp');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Mật khẩu phải có ít nhất 6 ký tự');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      await register(email, password, name, role);
-      navigate('/');
-    } catch (err) {
-      setError('Đăng ký thất bại. Vui lòng thử lại');
-    } finally {
-      setLoading(false);
-    }
+    setError('Chức năng đăng ký chưa được hỗ trợ. Vui lòng liên hệ admin.');
   };
 
   return (

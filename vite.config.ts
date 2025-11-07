@@ -12,9 +12,10 @@ export default defineConfig({
     },
   },
   server: {
+    port: 3000,
     proxy: {
       '/api': {
-        target: 'http://7496bed666d7.ngrok-free.app',
+        target: 'https://5f9ae45ae19e.ngrok-free.app',
         changeOrigin: true,
         secure: false,
         headers: {

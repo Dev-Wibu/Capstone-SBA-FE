@@ -1,15 +1,36 @@
-// src/types/index.ts
+// Auth interfaces
 export interface User {
-  id: string;
+  id: number;
   email: string;
-  firstName: string;
-  lastName: string;
-  avatar?: string;
+  fullName: string;
+  phoneNumber: string;
+  role: 'MENTOR' | 'ADMIN' | 'LECTURER';
+  status: boolean;
+  lecturerCode?: string;
+  createdAt: string;
 }
 
-export interface AuthCredentials {
+export interface LoginRequest {
   email: string;
   password: string;
+}
+
+export interface LoginResponse {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  expiresIn: number;
+}
+
+export interface ProfileResponse {
+  id: number;
+  email: string;
+  fullName: string;
+  phoneNumber: string;
+  role: 'MENTOR' | 'ADMIN' | 'LECTURER';
+  status: boolean;
+  lecturerCode?: string;
+  createdAt: string;
 }
 
 export interface AuthStore {
@@ -17,7 +38,7 @@ export interface AuthStore {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (credentials: AuthCredentials) => Promise<void>;
+  login: (credentials: LoginRequest) => Promise<void>;
   logout: () => void;
   clearError: () => void;
 }
@@ -72,16 +93,19 @@ export interface CapstoneProposalResponse {
   title: string;
   context: string;
   description: string;
-  status: 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'PENDING' | 'DUPLICATE_REJECTED' | 'DUPLICATE_ACCEPTED';
-  semester: Semester;
-  attachmentUrl: string;
+  status: 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'PENDING' | 'DUPLICATE_REJECTED' | 'DUPLICATE_ACCEPTED' | 'REJECT_BY_ADMIN' | 'REVIEW_1';
+  semester: Semester | null;
+  attachmentUrl: string | null;
   nonFunc: string[];
   func: string[];
   students?: Students;
   createdAt: string;
   updatedAt: string;
-  admin1: boolean;
-  admin2: boolean;
+  // Admin approval flags
+  isAdmin1: boolean;
+  admin1Id: number | null;
+  isAdmin2: boolean;
+  admin2Id: number | null;
 }
 
 // Resource interfaces

@@ -1,9 +1,12 @@
 import axios from 'axios';
 import type { Semester, CapstoneProposal, CapstoneProposalResponse } from '@/interfaces';
 
+// Lấy base URL từ Vite env (VITE_API_BASE_URL). Nếu không có, fallback về localhost
+const API_BASE_URL: string = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8080';
+
 // Tạo instance axios với cấu hình mặc định
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000',
+  baseURL: API_BASE_URL,
   timeout: 30000, // Tăng lên 30 giây vì ngrok có thể chậm
   // Không set default headers để tránh CORS preflight
 });
@@ -19,8 +22,8 @@ api.interceptors.request.use(
       config.headers['Content-Type'] = 'application/json';
     }
     
-    // Thêm token nếu có
-    const token = localStorage.getItem('token');
+    // Thêm token nếu có (lấy từ accessToken trong localStorage)
+    const token = localStorage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -39,8 +42,10 @@ api.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401) {
-      // Token hết hạn hoặc không hợp lệ
-      localStorage.removeItem('token');
+      // Token hết hạn hoặc không hợp lệ - xóa toàn bộ auth data
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
       window.location.href = '/login';
     }
     return Promise.reject(error);
@@ -160,4 +165,27 @@ export const deleteProposal = async (id: number): Promise<void> => {
 export const getProposalHistory = async (id: number): Promise<any[]> => {
   const response = await api.get(`/api/proposal-history/${id}/history`);
   return response.data;
+};
+
+/**
+ * Approve hoặc Reject proposal (Admin)
+ * @param proposalId - ID của proposal
+ * @param isApproved - true = approve, false = reject
+ * @param adminId - ID của admin đang duyệt
+ * @param reason - Lý do từ chối (chỉ cần khi reject)
+ */
+export const reviewProposal = async (
+  proposalId: number,
+  isApproved: boolean,
+  adminId: number,
+  reason?: string | null
+): Promise<void> => {
+  await api.put('/api/capstone-proposal', null, {
+    params: {
+      proposalId,
+      isApproved,
+      adminId,
+      reason: reason || null,
+    },
+  });
 };

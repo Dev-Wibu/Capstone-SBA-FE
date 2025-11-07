@@ -1,0 +1,513 @@
+import { useState, useEffect } from 'react';
+import type { CapstoneProposalResponse } from '../../interfaces';
+import { getAllProposals, reviewProposal } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { toast } from 'sonner';
+
+const AdminPage = () => {
+  const { user } = useAuth();
+  const [selectedProject, setSelectedProject] = useState<CapstoneProposalResponse | null>(null);
+  const [projects, setProjects] = useState<CapstoneProposalResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Reject modal states
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectingProposalId, setRejectingProposalId] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fetch proposals từ API
+  useEffect(() => {
+    fetchProposals();
+  }, []);
+
+  const fetchProposals = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('📥 [ADMIN] Fetching proposals...');
+      console.log('📥 [ADMIN] Current admin ID:', user?.id);
+      const data = await getAllProposals();
+      console.log('📥 [ADMIN] Received proposals:', data.length);
+      console.log('📥 [ADMIN] All statuses:', data.map(p => p.status));
+      
+      // Filter: Chỉ lấy proposals có status DUPLICATE_ACCEPTED VÀ chưa được admin hiện tại duyệt
+      const pendingForCurrentAdmin = data.filter(p => {
+        // Phải là status DUPLICATE_ACCEPTED
+        if (p.status !== 'DUPLICATE_ACCEPTED') return false;
+        
+        // Nếu admin hiện tại đã duyệt (admin1 hoặc admin2) thì loại bỏ
+        const alreadyReviewedByCurrentAdmin = 
+          (p.isAdmin1 && p.admin1Id === user?.id) || 
+          (p.isAdmin2 && p.admin2Id === user?.id);
+        
+        return !alreadyReviewedByCurrentAdmin;
+      });
+      
+      console.log('✅ [ADMIN] Filtered DUPLICATE_ACCEPTED:', data.filter(p => p.status === 'DUPLICATE_ACCEPTED').length);
+      console.log('✅ [ADMIN] Pending for current admin:', pendingForCurrentAdmin.length);
+      console.log('✅ [ADMIN] Already reviewed by current admin:', 
+        data.filter(p => 
+          p.status === 'DUPLICATE_ACCEPTED' && 
+          ((p.isAdmin1 && p.admin1Id === user?.id) || (p.isAdmin2 && p.admin2Id === user?.id))
+        ).length
+      );
+      
+      setProjects(pendingForCurrentAdmin);
+    } catch (err: any) {
+      console.error('❌ [ADMIN] Error fetching proposals:', err);
+      console.error('❌ [ADMIN] Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
+      setError('Không thể tải danh sách đề tài: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprove = async (projectId: number) => {
+    if (!user?.id) {
+      toast.error('Không tìm thấy thông tin admin');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      console.log('🟢 Approving proposal:', { projectId, adminId: user.id });
+      
+      await reviewProposal(projectId, true, user.id, 'Chấp nhận');
+      
+      console.log('✅ Approval successful');
+      toast.success('Đã duyệt đề tài thành công!', {
+        description: 'Đề tài đã được phê duyệt',
+        duration: 3000,
+      });
+      
+      // Close modal and refresh list
+      setSelectedProject(null);
+      await fetchProposals();
+    } catch (err: any) {
+      console.error('❌ Error approving proposal:', err);
+      toast.error('Lỗi khi duyệt đề tài', {
+        description: err.response?.data?.message || err.message || "Có lỗi xảy ra",
+        duration: 4000,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openRejectModal = (projectId: number) => {
+    setRejectingProposalId(projectId);
+    setRejectReason('');
+    setShowRejectModal(true);
+  };
+
+  const handleRejectSubmit = async () => {
+    if (!user?.id) {
+      toast.error('Không tìm thấy thông tin admin');
+      return;
+    }
+
+    if (!rejectReason.trim()) {
+      toast.warning('Vui lòng nhập lý do từ chối');
+      return;
+    }
+
+    if (!rejectingProposalId) return;
+
+    try {
+      setIsSubmitting(true);
+      console.log('🔴 Rejecting proposal:', { 
+        proposalId: rejectingProposalId, 
+        adminId: user.id, 
+        reason: rejectReason 
+      });
+      
+      await reviewProposal(rejectingProposalId, false, user.id, rejectReason);
+      
+      console.log('✅ Rejection successful');
+      toast.success('Đã từ chối đề tài thành công!', {
+        description: rejectReason.substring(0, 60) + (rejectReason.length > 60 ? '...' : ''),
+        duration: 3000,
+      });
+      
+      // Close modals and refresh list
+      setShowRejectModal(false);
+      setRejectingProposalId(null);
+      setRejectReason('');
+      setSelectedProject(null);
+      await fetchProposals();
+    } catch (err: any) {
+      console.error('❌ Error rejecting proposal:', err);
+      toast.error('Lỗi khi từ chối đề tài', {
+        description: err.response?.data?.message || err.message || "Có lỗi xảy ra",
+        duration: 4000,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Helper: Lấy danh sách students
+  const getStudentsList = (project: CapstoneProposalResponse): string[] => {
+    const students: string[] = [];
+    if (project.students) {
+      if (project.students.student1Name) students.push(project.students.student1Name);
+      if (project.students.student2Name) students.push(project.students.student2Name);
+      if (project.students.student3Name) students.push(project.students.student3Name);
+      if (project.students.student4Name) students.push(project.students.student4Name);
+      if (project.students.student5Name) students.push(project.students.student5Name);
+      if (project.students.student6Name) students.push(project.students.student6Name);
+    }
+    return students;
+  };
+
+  // Helper: Format date
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('vi-VN');
+  };
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          Quản trị hệ thống - Duyệt đề tài
+        </h1>
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <span className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-800 rounded-full font-medium">
+            <span>✅</span>
+            <span>Đã qua kiểm tra trùng lặp</span>
+          </span>
+          <span>→</span>
+          <span className="flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-800 rounded-full font-medium">
+            <span>👨‍💼</span>
+            <span>Chờ Admin duyệt cuối</span>
+          </span>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-6 max-w-md">
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-xl shadow-lg text-white">
+          <p className="text-sm text-orange-100 mb-2">Tổng đề tài chờ duyệt</p>
+          <p className="text-4xl font-bold">{projects.length}</p>
+          <p className="text-xs text-orange-100 mt-2">Đã qua kiểm tra trùng lặp</p>
+        </div>
+      </div>
+
+      {/* Projects List */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {projects.map((project) => {
+          const students = getStudentsList(project);
+          
+          return (
+            <div
+              key={project.id}
+              className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all border-t-4 border-orange-500"
+            >
+              <div className="p-6">
+                {/* Header */}
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">
+                      {project.title}
+                    </h3>
+                    <p className="text-sm text-gray-600 line-clamp-2 mb-3">
+                      {project.description}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Info */}
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center text-sm text-gray-600">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    {students[0] || 'N/A'}
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    {students.length} thành viên
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    {formatDate(project.createdAt)}
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                    {project.semester ? `${project.semester.name} (${project.semester.semesterCode})` : 'Chưa có học kỳ'}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    <span>✅</span>
+                    <span>Chờ duyệt</span>
+                  </span>
+                  <button
+                    onClick={() => setSelectedProject(project)}
+                    className="text-orange-600 hover:text-orange-700 font-medium text-sm"
+                  >
+                    Chi tiết →
+                  </button>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => handleApprove(project.id!)}
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ✓ Duyệt
+                  </button>
+                  <button
+                    onClick={() => openRejectModal(project.id!)}
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ✗ Từ chối
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {projects.length === 0 && (
+        <div className="text-center py-12">
+          <div className="text-gray-400 text-6xl mb-4">📋</div>
+          <p className="text-gray-500 text-lg font-medium mb-2">Không có đề tài nào cần duyệt</p>
+          <p className="text-gray-400 text-sm">Tất cả đề tài đã được xử lý hoặc chưa có đề tài mới</p>
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {selectedProject && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-6">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                    {selectedProject.title}
+                  </h2>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      <span>✅</span>
+                      <span>Chờ Admin duyệt</span>
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedProject(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Context */}
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                  <span>📌</span>
+                  <span>Bối cảnh</span>
+                </h3>
+                <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedProject.context}</p>
+              </div>
+
+              {/* Description */}
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                  <span>📝</span>
+                  <span>Mô tả chi tiết</span>
+                </h3>
+                <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedProject.description}</p>
+              </div>
+
+              {/* Functional Requirements */}
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                  <span>⚙️</span>
+                  <span>Yêu cầu chức năng ({selectedProject.func.length})</span>
+                </h3>
+                <ul className="space-y-2">
+                  {selectedProject.func.map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-sm text-gray-700 bg-blue-50 p-2 rounded">
+                      <span className="text-blue-600 font-bold mt-0.5">{idx + 1}.</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Non-Functional Requirements */}
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                  <span>🎯</span>
+                  <span>Yêu cầu phi chức năng ({selectedProject.nonFunc.length})</span>
+                </h3>
+                <ul className="space-y-2">
+                  {selectedProject.nonFunc.map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-sm text-gray-700 bg-purple-50 p-2 rounded">
+                      <span className="text-purple-600 font-bold mt-0.5">{idx + 1}.</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Students */}
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                  <span>👥</span>
+                  <span>Thành viên nhóm</span>
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {getStudentsList(selectedProject).map((student, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-orange-50 px-3 py-2 rounded-lg">
+                      <span className="w-6 h-6 bg-orange-200 rounded-full flex items-center justify-center text-xs font-bold text-orange-800">
+                        {idx + 1}
+                      </span>
+                      <span className="text-sm font-medium text-gray-700">{student}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Semester Info */}
+              {selectedProject.semester && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <span>📅</span>
+                    <span>Thông tin học kỳ</span>
+                  </h3>
+                  <div className="bg-gray-50 p-3 rounded-lg text-sm">
+                    <p><span className="font-medium">Tên:</span> {selectedProject.semester.name}</p>
+                    <p><span className="font-medium">Mã:</span> {selectedProject.semester.semesterCode}</p>
+                    <p><span className="font-medium">Năm học:</span> {selectedProject.semester.year}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4 border-t">
+                <button
+                  onClick={() => handleApprove(selectedProject.id!)}
+                  disabled={isSubmitting}
+                  className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'Đang xử lý...' : '✓ Duyệt đồ án'}
+                </button>
+                <button
+                  onClick={() => openRejectModal(selectedProject.id!)}
+                  disabled={isSubmitting}
+                  className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  ✗ Từ chối
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <span className="text-2xl">⚠️</span>
+                <span>Từ chối đề tài</span>
+              </h3>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <p className="text-gray-600">
+                Vui lòng nhập lý do từ chối đề tài này:
+              </p>
+              
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Nhập lý do từ chối..."
+                rows={5}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                disabled={isSubmitting}
+              />
+              
+              {rejectReason.trim() && (
+                <p className="text-sm text-gray-500">
+                  Số ký tự: {rejectReason.length}
+                </p>
+              )}
+            </div>
+            
+            <div className="p-6 border-t border-gray-200 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setRejectingProposalId(null);
+                  setRejectReason('');
+                }}
+                disabled={isSubmitting}
+                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleRejectSubmit}
+                disabled={isSubmitting || !rejectReason.trim()}
+                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? 'Đang xử lý...' : 'Xác nhận từ chối'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default AdminPage;
