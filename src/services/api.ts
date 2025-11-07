@@ -1,8 +1,8 @@
 import axios from 'axios';
-import type { Semester, CapstoneProposal, CapstoneProposalResponse } from '@/interfaces';
+import type { Semester, CapstoneProposal, CapstoneProposalResponse, Lecturer } from '@/interfaces';
 
 // Lấy base URL từ Vite env (VITE_API_BASE_URL). Nếu không có, fallback về localhost
-const API_BASE_URL: string = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8080';
+const API_BASE_URL: string = (import.meta.env.VITE_API_BASE_URL as string) || 'https://66b7b94833d1.ngrok-free.app';
 
 // Tạo instance axios với cấu hình mặc định
 const api = axios.create({
@@ -26,6 +26,19 @@ api.interceptors.request.use(
     const token = localStorage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      // Log khi thêm token vào request (chỉ log 1 lần mỗi 10 giây để tránh spam)
+      const lastLogTime = (window as any).__lastTokenLogTime || 0;
+      const now = Date.now();
+      if (now - lastLogTime > 10000) {
+        console.log('🔑 [API] Token attached to request:', {
+          url: config.url,
+          hasToken: true,
+          tokenPrefix: token.substring(0, 20) + '...'
+        });
+        (window as any).__lastTokenLogTime = now;
+      }
+    } else {
+      console.warn('⚠️ [API] No token found for request:', config.url);
     }
     
     return config;
@@ -41,12 +54,22 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    // CHỈ logout nếu:
+    // 1. Response status là 401
+    // 2. User đang có token (tức là đang login)
+    // 3. Không phải đang ở trang login
     if (error.response?.status === 401) {
-      // Token hết hạn hoặc không hợp lệ - xóa toàn bộ auth data
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      const hasToken = localStorage.getItem('accessToken');
+      const isLoginPage = window.location.pathname === '/login';
+      
+      // Chỉ logout nếu đang có token và không phải trang login
+      if (hasToken && !isLoginPage) {
+        console.warn('⚠️ [API] Token expired or invalid - logging out');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -126,6 +149,15 @@ export const getAllProposals = async (): Promise<CapstoneProposalResponse[]> => 
 };
 
 /**
+ * Lấy danh sách proposals cần duyệt bởi admin cụ thể
+ * (Proposals có status DUPLICATE_ACCEPTED và admin chưa được assign)
+ */
+export const getProposalsByAdmin = async (adminId: number): Promise<CapstoneProposalResponse[]> => {
+  const response = await api.get<CapstoneProposalResponse[]>(`/api/capstone-proposal/by-admin/${adminId}`);
+  return response.data;
+};
+
+/**
  * Lấy chi tiết capstone proposal theo ID
  */
 export const getProposalById = async (id: number): Promise<CapstoneProposalResponse> => {
@@ -187,5 +219,40 @@ export const reviewProposal = async (
       adminId,
       reason: reason || null,
     },
+  });
+};
+
+// ===== Lecturer APIs =====
+/**
+ * Lấy danh sách tất cả lecturers
+ */
+export const getLecturers = async (): Promise<Lecturer[]> => {
+  const response = await api.get<Lecturer[]>('/api/lecturers');
+  return response.data;
+};
+
+/**
+ * Lấy thông tin lecturer theo ID
+ */
+export const getLecturerById = async (id: number): Promise<Lecturer> => {
+  const response = await api.get<Lecturer>(`/api/lecturers/${id}`);
+  return response.data;
+};
+
+// ===== Review schedule APIs =====
+/**
+ * Cập nhật lịch review cho proposal
+ * @param proposalId ID của proposal
+ * @param date Ngày giờ theo định dạng 'YYYY-MM-DDTHH:mm:ss' (không timezone)
+ * @param reviewTime 1 | 2 | 3 tương ứng REVIEW_1/2/3
+ */
+export const updateProposalReview = async (
+  proposalId: number,
+  date: string,
+  reviewTime: 1 | 2 | 3,
+  mentorCode?: string
+): Promise<void> => {
+  await api.put('/api/capstone-proposal/update-review', null, {
+    params: { proposalId, date, reviewTime, mentorCode },
   });
 };

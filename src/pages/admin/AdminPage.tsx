@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { CapstoneProposalResponse } from '../../interfaces';
-import { getAllProposals, reviewProposal } from '../../services/api';
+import { getProposalsByAdmin, reviewProposal } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
 
@@ -27,35 +27,17 @@ const AdminPage = () => {
       setLoading(true);
       setError(null);
       
-      console.log('📥 [ADMIN] Fetching proposals...');
-      console.log('📥 [ADMIN] Current admin ID:', user?.id);
-      const data = await getAllProposals();
-      console.log('📥 [ADMIN] Received proposals:', data.length);
-      console.log('📥 [ADMIN] All statuses:', data.map(p => p.status));
+      if (!user?.id) {
+        setError('Không tìm thấy thông tin admin');
+        return;
+      }
       
-      // Filter: Chỉ lấy proposals có status DUPLICATE_ACCEPTED VÀ chưa được admin hiện tại duyệt
-      const pendingForCurrentAdmin = data.filter(p => {
-        // Phải là status DUPLICATE_ACCEPTED
-        if (p.status !== 'DUPLICATE_ACCEPTED') return false;
-        
-        // Nếu admin hiện tại đã duyệt (admin1 hoặc admin2) thì loại bỏ
-        const alreadyReviewedByCurrentAdmin = 
-          (p.isAdmin1 && p.admin1Id === user?.id) || 
-          (p.isAdmin2 && p.admin2Id === user?.id);
-        
-        return !alreadyReviewedByCurrentAdmin;
-      });
+      console.log('📥 [ADMIN] Fetching proposals for admin:', user.id);
+      const data = await getProposalsByAdmin(user.id);
+      console.log('✅ [ADMIN] Received proposals:', data.length);
+      console.log('� [ADMIN] Proposals:', data);
       
-      console.log('✅ [ADMIN] Filtered DUPLICATE_ACCEPTED:', data.filter(p => p.status === 'DUPLICATE_ACCEPTED').length);
-      console.log('✅ [ADMIN] Pending for current admin:', pendingForCurrentAdmin.length);
-      console.log('✅ [ADMIN] Already reviewed by current admin:', 
-        data.filter(p => 
-          p.status === 'DUPLICATE_ACCEPTED' && 
-          ((p.isAdmin1 && p.admin1Id === user?.id) || (p.isAdmin2 && p.admin2Id === user?.id))
-        ).length
-      );
-      
-      setProjects(pendingForCurrentAdmin);
+      setProjects(data);
     } catch (err: any) {
       console.error('❌ [ADMIN] Error fetching proposals:', err);
       console.error('❌ [ADMIN] Error details:', {

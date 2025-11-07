@@ -1,4 +1,8 @@
-import type { CapstoneProposalResponse } from '@/interfaces';
+import type { CapstoneProposalResponse, Lecturer } from '@/interfaces';
+import { useEffect, useState } from 'react';
+import { getLecturerById } from '@/services/api';
+import ScheduleReviewModal from '@/components/ScheduleReviewModal';
+import { exportProposalToDocx } from '@/utils/exportDocx';
 
 interface ProposalDetailModalProps {
   proposal: CapstoneProposalResponse | null;
@@ -8,6 +12,58 @@ interface ProposalDetailModalProps {
 }
 
 const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain }: ProposalDetailModalProps) => {
+  const [admin1Info, setAdmin1Info] = useState<Lecturer | null>(null);
+  const [admin2Info, setAdmin2Info] = useState<Lecturer | null>(null);
+  const [loadingAdmins, setLoadingAdmins] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleReviewTime, setScheduleReviewTime] = useState<1 | 2 | 3>(1);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportDocx = async () => {
+    if (!proposal) return;
+    try {
+      setIsExporting(true);
+      await exportProposalToDocx(proposal);
+    } catch (error) {
+      console.error('Error exporting to docx:', error);
+      alert('Có lỗi khi xuất file Word. Vui lòng thử lại.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  useEffect(() => {
+    const fetchAdmins = async () => {
+      if (!proposal || !isOpen) return;
+      setLoadingAdmins(true);
+      try {
+        const promises: Promise<void>[] = [];
+        if (proposal.admin1Id !== null) {
+          promises.push(
+            getLecturerById(proposal.admin1Id)
+              .then(data => setAdmin1Info(data))
+              .catch(() => setAdmin1Info(null))
+          );
+        } else {
+          setAdmin1Info(null);
+        }
+        if (proposal.admin2Id !== null) {
+          promises.push(
+            getLecturerById(proposal.admin2Id)
+              .then(data => setAdmin2Info(data))
+              .catch(() => setAdmin2Info(null))
+          );
+        } else {
+          setAdmin2Info(null);
+        }
+        await Promise.all(promises);
+      } finally {
+        setLoadingAdmins(false);
+      }
+    };
+    fetchAdmins();
+  }, [proposal, isOpen]);
+
   if (!isOpen || !proposal) return null;
 
   const getStatusConfig = (status: string) => {
@@ -18,6 +74,14 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain }: Propo
       PENDING: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Chờ xử lý', icon: '⏳' },
       DUPLICATE_REJECTED: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Trùng lặp - Từ chối', icon: '⚠️' },
       DUPLICATE_ACCEPTED: { bg: 'bg-teal-100', text: 'text-teal-700', label: 'Trùng lặp - Chấp nhận', icon: '✓' },
+      REJECT_BY_ADMIN: { bg: 'bg-red-100', text: 'text-red-700', label: 'Admin từ chối', icon: '🚫' },
+      REVIEW_1: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Review 1', icon: '👤' },
+      REVIEW_2: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Review 2', icon: '👥' },
+      REVIEW_3: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Review 3', icon: '👥' },
+      DEFENSE: { bg: 'bg-indigo-100', text: 'text-indigo-700', label: 'Bảo vệ', icon: '🏛️' },
+      SECOND_DEFENSE: { bg: 'bg-indigo-100', text: 'text-indigo-700', label: 'Bảo vệ lần 2', icon: '🏛️' },
+      COMPLETED: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Hoàn thành', icon: '🎉' },
+      FAILED: { bg: 'bg-gray-200', text: 'text-gray-700', label: 'Thất bại', icon: '💥' },
     };
     return configs[status as keyof typeof configs] || configs.PENDING;
   };
@@ -73,6 +137,72 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain }: Propo
 
         {/* Content */}
         <div className="p-6 space-y-6">
+          {/* Mentor phụ */}
+          {proposal.lecturerCode2 && (
+            <div className="bg-amber-50 p-4 rounded-lg">
+              <h3 className="text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A3 3 0 017 17h10a3 3 0 012.879 2.804L20 20H4l1.121-2.196zM15 11a3 3 0 10-6 0 3 3 0 006 0zm6 0a6 6 0 11-12 0 6 6 0 0112 0z" />
+                </svg>
+                Mentor phụ
+              </h3>
+              <p className="text-gray-800">
+                Mã giảng viên: <span className="font-medium">{proposal.lecturerCode2}</span>
+              </p>
+            </div>
+          )}
+          {/* Lịch review (chỉ hiện nếu có ít nhất một mốc) */}
+          {(proposal.review1At || proposal.review2At || proposal.review3At) && (
+            <div className="bg-indigo-50 p-4 rounded-lg">
+              <h3 className="text-sm font-semibold text-indigo-900 mb-3 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Lịch review
+              </h3>
+              <div className="space-y-3">
+                {proposal.review1At && (
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white border border-indigo-100 p-3 rounded-lg gap-2">
+                    <div>
+                      <p className="text-xs text-indigo-700 font-semibold mb-1">Review 1</p>
+                      <p className="text-sm font-medium text-gray-900">{formatDate(proposal.review1At)}</p>
+                    </div>
+                    {proposal.lecturerReview1Code && (
+                      <div className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">
+                        Mentor: {proposal.lecturerReview1Code}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {proposal.review2At && (
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white border border-indigo-100 p-3 rounded-lg gap-2">
+                    <div>
+                      <p className="text-xs text-indigo-700 font-semibold mb-1">Review 2</p>
+                      <p className="text-sm font-medium text-gray-900">{formatDate(proposal.review2At)}</p>
+                    </div>
+                    {proposal.lecturerReview2Code && (
+                      <div className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">
+                        Mentor: {proposal.lecturerReview2Code}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {proposal.review3At && (
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white border border-indigo-100 p-3 rounded-lg gap-2">
+                    <div>
+                      <p className="text-xs text-indigo-700 font-semibold mb-1">Review 3</p>
+                      <p className="text-sm font-medium text-gray-900">{formatDate(proposal.review3At)}</p>
+                    </div>
+                    {proposal.lecturerReview3Code && (
+                      <div className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded">
+                        Mentor: {proposal.lecturerReview3Code}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {/* Bối cảnh */}
           <div className="bg-blue-50 p-4 rounded-lg">
             <h3 className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
@@ -197,28 +327,120 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain }: Propo
             </div>
           )}
 
-          {/* Metadata */}
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Ngày tạo</p>
-              <p className="text-sm font-medium text-gray-900">{formatDate(proposal.createdAt)}</p>
+          {/* Trạng thái duyệt của Admin (chỉ hiện khi có admin liên quan) */}
+          {(proposal.admin1Id !== null || proposal.admin2Id !== null) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
+              {proposal.admin1Id !== null && (
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-xs text-gray-500 mb-1 flex items-center gap-2">
+                    <span className="font-semibold">Admin 1</span>
+                    {loadingAdmins && <span className="text-gray-400">(Đang tải...)</span>}
+                    {!loadingAdmins && admin1Info && (
+                      <span className="text-gray-700">{admin1Info.fullName} ({admin1Info.lecturerCode})</span>
+                    )}
+                    {!loadingAdmins && !admin1Info && (
+                      <span className="text-red-500">Không tìm thấy</span>
+                    )}
+                  </p>
+                  <p className="text-sm font-medium flex items-center gap-2">
+                    {proposal.isAdmin1 ? (
+                      <span className="text-green-600 flex items-center gap-1">
+                        <span>✅ Đã duyệt</span>
+                        {proposal.review1At && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                            {formatDate(proposal.review1At)}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-yellow-600 flex items-center gap-1">
+                        ⏳ Chờ duyệt
+                        {proposal.review1At && (
+                          <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">
+                            {formatDate(proposal.review1At)}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
+              {proposal.admin2Id !== null && (
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <p className="text-xs text-gray-500 mb-1 flex items-center gap-2">
+                    <span className="font-semibold">Admin 2</span>
+                    {loadingAdmins && <span className="text-gray-400">(Đang tải...)</span>}
+                    {!loadingAdmins && admin2Info && (
+                      <span className="text-gray-700">{admin2Info.fullName} ({admin2Info.lecturerCode})</span>
+                    )}
+                    {!loadingAdmins && !admin2Info && (
+                      <span className="text-red-500">Không tìm thấy</span>
+                    )}
+                  </p>
+                  <p className="text-sm font-medium flex items-center gap-2">
+                    {proposal.isAdmin2 ? (
+                      <span className="text-green-600 flex items-center gap-1">
+                        <span>✅ Đã duyệt</span>
+                        {proposal.review2At && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                            {formatDate(proposal.review2At)}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-yellow-600 flex items-center gap-1">
+                        ⏳ Chờ duyệt
+                        {proposal.review2At && (
+                          <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">
+                            {formatDate(proposal.review2At)}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
+              {/* Trường hợp có review3At (ví dụ vòng bổ sung) */}
+              {proposal.review3At && (
+                <div className="bg-indigo-50 p-3 rounded-lg md:col-span-2">
+                  <p className="text-xs text-indigo-700 mb-1 font-semibold">Review 3</p>
+                  <p className="text-sm font-medium text-indigo-900 flex items-center gap-2">
+                    <span>⏱ Thời gian:</span>
+                    <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
+                      {formatDate(proposal.review3At)}
+                    </span>
+                  </p>
+                </div>
+              )}
             </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Cập nhật lần cuối</p>
-              <p className="text-sm font-medium text-gray-900">{formatDate(proposal.updatedAt)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Admin 1</p>
-              <p className="text-sm font-medium text-gray-900">
-                {proposal.admin1 ? '✅ Đã duyệt' : '⏳ Chờ duyệt'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Admin 2</p>
-              <p className="text-sm font-medium text-gray-900">
-                {proposal.admin2 ? '✅ Đã duyệt' : '⏳ Chờ duyệt'}
-              </p>
-            </div>
+          )}
+
+          {/* Nút xếp lịch nếu đang ở status REVIEW_X mà chưa có reviewXAt */}
+          <div className="pt-4">
+            {proposal.status === 'REVIEW_1' && !proposal.review1At && (
+              <button
+                onClick={() => { setScheduleReviewTime(1); setShowScheduleModal(true); }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+              >
+                Xếp lịch Review 1
+              </button>
+            )}
+            {proposal.status === 'REVIEW_2' && !proposal.review2At && (
+              <button
+                onClick={() => { setScheduleReviewTime(2); setShowScheduleModal(true); }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+              >
+                Xếp lịch Review 2
+              </button>
+            )}
+            {proposal.status === 'REVIEW_3' && !proposal.review3At && (
+              <button
+                onClick={() => { setScheduleReviewTime(3); setShowScheduleModal(true); }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+              >
+                Xếp lịch Review 3
+              </button>
+            )}
           </div>
         </div>
 
@@ -240,6 +462,16 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain }: Propo
               </button>
             )}
             <button
+              onClick={handleExportDocx}
+              disabled={isExporting}
+              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              {isExporting ? 'Đang xuất...' : 'Xuất Word'}
+            </button>
+            <button
               onClick={onClose}
               className="flex-1 px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium transition"
             >
@@ -248,6 +480,19 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain }: Propo
           </div>
         </div>
       </div>
+
+      {/* Modal xếp lịch */}
+      <ScheduleReviewModal
+        isOpen={showScheduleModal}
+        onClose={() => setShowScheduleModal(false)}
+        proposalId={proposal.id as number}
+        reviewTime={scheduleReviewTime}
+        excludeCodes={[proposal.lecturerCode1 || '', proposal.lecturerCode2 || ''].filter(Boolean) as string[]}
+        onSuccess={() => {
+          // Sau khi xếp lịch thành công, đóng modal chi tiết để làm mới dữ liệu bên ngoài
+          onClose();
+        }}
+      />
     </div>
   );
 };

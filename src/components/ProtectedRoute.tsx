@@ -6,9 +6,19 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Hiển thị loading khi đang restore session từ localStorage
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
+    console.log('🚫 [PROTECTED_ROUTE] User not authenticated - redirecting to login');
     return <Navigate to="/login" replace />;
   }
 

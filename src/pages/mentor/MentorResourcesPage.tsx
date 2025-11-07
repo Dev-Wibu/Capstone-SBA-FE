@@ -1,15 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Semester, CapstoneProposalResponse } from '@/interfaces';
-import { getSemesters, createProposal, getAllProposals, getProposalById } from '@/services/api';
+import type { Semester, CapstoneProposalResponse, Lecturer } from '@/interfaces';
+import { getSemesters, createProposal, getAllProposals, getProposalById, getLecturers } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 import AddSemesterModal from '@/components/AddSemesterModal';
 import ProposalDetailModal from '@/components/ProposalDetailModal';
 import AlertModal from '@/components/AlertModal';
 import ProposalComparisonModal from '@/components/ProposalComparisonModal';
+import { parseDocxFile, validateParsedData } from '@/utils/docxParser';
+import { toast } from 'sonner';
 
 const MentorResourcesPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showAddSemesterModal, setShowAddSemesterModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -18,7 +23,8 @@ const MentorResourcesPage = () => {
   const [duplicateProposal, setDuplicateProposal] = useState<CapstoneProposalResponse | null>(null);
   const [currentProposal, setCurrentProposal] = useState<CapstoneProposalResponse | null>(null);
   const [semanticDistance, setSemanticDistance] = useState<number>(0);
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'PENDING' | 'DUPLICATE_REJECTED' | 'DUPLICATE_ACCEPTED'>('all');
+  const [isImporting, setIsImporting] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<'submitted' | 'rejected'>('submitted');
   const [alertConfig, setAlertConfig] = useState<{
     isOpen: boolean;
     title: string;
@@ -35,11 +41,14 @@ const MentorResourcesPage = () => {
   });
   const [semesters, setSemesters] = useState<Semester[]>([]);
   const [proposals, setProposals] = useState<CapstoneProposalResponse[]>([]);
+  const [lecturers, setLecturers] = useState<Lecturer[]>([]);
+  const [isLoadingLecturers, setIsLoadingLecturers] = useState(false);
+  const [lecturersError, setLecturersError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingProposals, setIsLoadingProposals] = useState(false);
-  const [studentCount, setStudentCount] = useState(1); // Số lượng sinh viên hiển thị (1-6)
+  const [studentCount, setStudentCount] = useState(1);
   const [formData, setFormData] = useState({
-    id: null as number | null, // ID proposal để edit (null = create mới)
+    id: null as number | null,
     title: '',
     context: '',
     description: '',
@@ -60,31 +69,56 @@ const MentorResourcesPage = () => {
       student6Name: '',
     },
     semesterId: 0,
+    lecturerCode1: user?.lecturerCode || '',
+    lecturerCode2: '',
     isAdmin1: false,
     isAdmin2: false,
   });
 
-  const filteredProposals = proposals.filter(
-    (p) => selectedCategory === 'all' || p.status === selectedCategory
-  );
+  // Danh sách status cho từng filter
+  const SUBMITTED_STATUSES = ['SUBMITTED', 'DUPLICATE_ACCEPTED', 'REVIEW_1', 'REVIEW_2', 'REVIEW_3', 'DEFENSE', 'SECOND_DEFENSE', 'COMPLETED'];
+  const REJECTED_STATUSES = ['DUPLICATE_REJECTED', 'REJECT_BY_ADMIN', 'FAILED'];
+
+  const filteredProposals = proposals.filter((p) => {
+    if (selectedCategory === 'submitted') {
+      return SUBMITTED_STATUSES.includes(p.status);
+    } else if (selectedCategory === 'rejected') {
+      return REJECTED_STATUSES.includes(p.status);
+    }
+    return false;
+  });
 
   // Fetch data khi component mount
   useEffect(() => {
     fetchSemestersData();
     fetchProposalsData();
+    fetchLecturersData();
   }, []);
 
   const fetchSemestersData = async () => {
     try {
       const data = await getSemesters();
       setSemesters(data);
-      // Set default semester to current semester
-      const currentSemester = data.find((s) => s.current);
-      if (currentSemester) {
-        setFormData(prev => ({ ...prev, semesterId: currentSemester.id }));
-      }
     } catch (error) {
-      console.error('Error fetching semesters:', error);
+      // Silently handle error
+    }
+  };
+
+  const fetchLecturersData = async () => {
+    setIsLoadingLecturers(true);
+    setLecturersError(null);
+    try {
+      const data = await getLecturers();
+      const mentors = data.filter(l => l.role === 'MENTOR');
+      setLecturers(mentors);
+      if (mentors.length === 0) {
+        console.warn('[Mentors] Không tìm thấy giảng viên có role MENTOR');
+      }
+    } catch (error: any) {
+      console.error('Error fetching lecturers:', error);
+      setLecturersError(error?.message || 'Không thể tải danh sách mentor');
+    } finally {
+      setIsLoadingLecturers(false);
     }
   };
 
@@ -92,11 +126,13 @@ const MentorResourcesPage = () => {
     setIsLoadingProposals(true);
     try {
       const data = await getAllProposals();
-      console.log('📦 Fetched proposals:', data);
-      console.log('📦 First proposal students:', data[0]?.students);
-      setProposals(data);
+      // Lọc proposals theo mentor hiện tại: xuất hiện ở lecturerCode1 hoặc lecturerCode2
+      const currentCode = user?.lecturerCode;
+      const filtered = currentCode
+        ? data.filter(p => p.lecturerCode1 === currentCode || p.lecturerCode2 === currentCode)
+        : data;
+      setProposals(filtered);
     } catch (error: any) {
-      console.error('❌ Error fetching proposals:', error);
       setAlertConfig({
         isOpen: true,
         title: 'Lỗi tải dữ liệu',
@@ -114,30 +150,7 @@ const MentorResourcesPage = () => {
   };
 
   const handleUploadAgain = (proposal: CapstoneProposalResponse) => {
-    // Populate form với data từ proposal để edit
-    const students = {
-      student1Id: proposal.students?.student1Id || '',
-      student1Name: proposal.students?.student1Name || '',
-      student2Id: proposal.students?.student2Id || '',
-      student2Name: proposal.students?.student2Name || '',
-      student3Id: proposal.students?.student3Id || '',
-      student3Name: proposal.students?.student3Name || '',
-      student4Id: proposal.students?.student4Id || '',
-      student4Name: proposal.students?.student4Name || '',
-      student5Id: proposal.students?.student5Id || '',
-      student5Name: proposal.students?.student5Name || '',
-      student6Id: proposal.students?.student6Id || '',
-      student6Name: proposal.students?.student6Name || '',
-    };
-    
-    // Tính số lượng sinh viên có data
-    let count = 1; // Minimum 1
-    if (students.student2Id && students.student2Name) count = 2;
-    if (students.student3Id && students.student3Name) count = 3;
-    if (students.student4Id && students.student4Name) count = 4;
-    if (students.student5Id && students.student5Name) count = 5;
-    if (students.student6Id && students.student6Name) count = 6;
-    
+    // Populate formData với data từ proposal để edit
     setFormData({
       id: proposal.id,
       title: proposal.title,
@@ -145,22 +158,44 @@ const MentorResourcesPage = () => {
       description: proposal.description,
       func: proposal.func,
       nonFunc: proposal.nonFunc,
-      students,
+      students: {
+        student1Id: proposal.students?.student1Id || '',
+        student1Name: proposal.students?.student1Name || '',
+        student2Id: proposal.students?.student2Id || '',
+        student2Name: proposal.students?.student2Name || '',
+        student3Id: proposal.students?.student3Id || '',
+        student3Name: proposal.students?.student3Name || '',
+        student4Id: proposal.students?.student4Id || '',
+        student4Name: proposal.students?.student4Name || '',
+        student5Id: proposal.students?.student5Id || '',
+        student5Name: proposal.students?.student5Name || '',
+        student6Id: proposal.students?.student6Id || '',
+        student6Name: proposal.students?.student6Name || '',
+      },
       semesterId: proposal.semester?.id || 0,
-      isAdmin1: proposal.admin1,
-      isAdmin2: proposal.admin2,
+      isAdmin1: false,
+      isAdmin2: false,
+      lecturerCode1: proposal.lecturerCode1 || user?.lecturerCode || '',
+      lecturerCode2: proposal.lecturerCode2 || '',
     });
-    setStudentCount(count);
-    // Mở upload modal
+    
+    // Count số lượng sinh viên có data
+    let count = 0;
+    for (let i = 1; i <= 6; i++) {
+      const idKey = `student${i}Id` as keyof typeof proposal.students;
+      const nameKey = `student${i}Name` as keyof typeof proposal.students;
+      if (proposal.students?.[idKey] && proposal.students?.[nameKey]) {
+        count = i;
+      }
+    }
+    if (count > 0) setStudentCount(count);
+    
     setShowUploadModal(true);
   };
 
   const handleUpload = async (e: FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
-    console.log('🚀 handleUpload triggered');
-    console.log('📋 Current formData:', formData);
 
     try {
       // Chuẩn bị data để gửi
@@ -204,24 +239,18 @@ const MentorResourcesPage = () => {
         },
         isAdmin1: formData.isAdmin1,
         isAdmin2: formData.isAdmin2,
+        lecturerCode1: formData.lecturerCode1,
+        lecturerCode2: formData.lecturerCode2 || undefined,
+        review1At: null,
+        review2At: null,
+        review3At: null,
+        admin1Id: null,
+        admin2Id: null,
       };
       
       const payload = formData.id ? { ...basePayload, id: formData.id } : { ...basePayload, id: null };
 
-      console.log('='.repeat(60));
-      console.log('📤 SUBMITTING PROPOSAL');
-      console.log('='.repeat(60));
-      console.log('🆔 formData.id:', formData.id);
-      console.log('📦 Payload:', JSON.stringify(payload, null, 2));
-      console.log('='.repeat(60));
-
       // Unified POST endpoint for both create (id=null) and update (id>0)
-      if (formData.id && formData.id > 0) {
-        console.log('🔄 Calling createProposal in UPDATE mode with ID:', formData.id);
-      } else {
-        console.log('✨ Calling createProposal (CREATE mode with id: null)');
-      }
-      console.log('🌐 URL: POST /api/capstone-proposal');
       await createProposal(payload);
       
       // Reset form và đóng modal
@@ -250,6 +279,8 @@ const MentorResourcesPage = () => {
         semesterId: semesters.find(s => s.current)?.id || 0,
         isAdmin1: false,
         isAdmin2: false,
+        lecturerCode1: user?.lecturerCode || '',
+        lecturerCode2: '',
       });
 
       // Thông báo thành công và refresh danh sách
@@ -263,12 +294,7 @@ const MentorResourcesPage = () => {
     } catch (error: any) {
       // Bắt lỗi 409 - Proposal trùng lặp
       if (error.response?.status === 409) {
-        console.log('='.repeat(60));
-        console.log('⚠️  RECEIVED 409 ERROR');
-        console.log('='.repeat(60));
-        
         const errorData = error.response.data;
-        console.log('📥 Error response:', JSON.stringify(errorData, null, 2));
         const message = errorData.message || 'Proposal bị trùng lặp!';
         
         // Lấy ID của cả 2 proposals (chuẩn hoá key để phòng trường hợp BE đánh máy "currtentId")
@@ -277,7 +303,6 @@ const MentorResourcesPage = () => {
         const currentIdRaw = result.currentId ?? result.currtentId ?? result.currentID ?? result.curentId;
         const duplicateId = duplicateIdRaw != null ? parseInt(String(duplicateIdRaw), 10) : NaN;
         const currentId = currentIdRaw != null ? parseInt(String(currentIdRaw), 10) : NaN;
-        console.log('🆔 Parsed IDs - currentId:', currentId, ', duplicateId:', duplicateId);
 
         // Kiểm tra ID hợp lệ -> lấy cả 2 proposals và gắn ngay formData.id
         if (duplicateId > 0 && !isNaN(duplicateId) && currentId > 0 && !isNaN(currentId)) {
@@ -291,11 +316,8 @@ const MentorResourcesPage = () => {
             setDuplicateProposal(duplicateProposalData);
             setSemanticDistance(errorData.result.distance);
 
-            console.log('🔗 BEFORE setFormData - formData.id:', formData.id);
-            console.log('🔗 Setting formData.id to currentId:', currentId);
             setFormData(prev => {
               const newFormData = { ...prev, id: currentId };
-              console.log('🔗 AFTER setFormData - new formData:', newFormData);
               return newFormData;
             });
 
@@ -404,16 +426,105 @@ const MentorResourcesPage = () => {
     }));
   };
 
+  // Import từ file Word
+  const handleImportFromWord = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Kiểm tra file extension
+    if (!file.name.endsWith('.docx') && !file.name.endsWith('.doc')) {
+      toast.error('File không hợp lệ', {
+        description: 'Vui lòng chọn file Word (.docx hoặc .doc)',
+        duration: 3000,
+      });
+      return;
+    }
+
+    setIsImporting(true);
+    toast.info('Đang đọc file...', { duration: 2000 });
+
+    try {
+      const parsedData = await parseDocxFile(file);
+      
+      // Validate data
+      const validation = validateParsedData(parsedData);
+      if (!validation.valid) {
+        toast.warning('Dữ liệu chưa đầy đủ', {
+          description: validation.errors.join(', '),
+          duration: 5000,
+        });
+      }
+
+      // Count số lượng sinh viên có trong file
+      let studentCountFromFile = 0;
+      for (let i = 1; i <= 6; i++) {
+        const idKey = `student${i}Id` as keyof typeof parsedData.students;
+        const nameKey = `student${i}Name` as keyof typeof parsedData.students;
+        if (parsedData.students[idKey] && parsedData.students[nameKey]) {
+          studentCountFromFile = i;
+        }
+      }
+      if (studentCountFromFile > 0) {
+        setStudentCount(studentCountFromFile);
+      }
+
+      // Fill vào form
+      setFormData(prev => ({
+        ...prev,
+        title: parsedData.title || prev.title,
+        context: parsedData.context || prev.context,
+        description: parsedData.description || prev.description,
+        func: parsedData.func.length > 0 ? parsedData.func : prev.func,
+        nonFunc: parsedData.nonFunc.length > 0 ? parsedData.nonFunc : prev.nonFunc,
+        students: {
+          student1Id: parsedData.students.student1Id || prev.students.student1Id,
+          student1Name: parsedData.students.student1Name || prev.students.student1Name,
+          student2Id: parsedData.students.student2Id || prev.students.student2Id,
+          student2Name: parsedData.students.student2Name || prev.students.student2Name,
+          student3Id: parsedData.students.student3Id || prev.students.student3Id,
+          student3Name: parsedData.students.student3Name || prev.students.student3Name,
+          student4Id: parsedData.students.student4Id || prev.students.student4Id,
+          student4Name: parsedData.students.student4Name || prev.students.student4Name,
+          student5Id: parsedData.students.student5Id || prev.students.student5Id,
+          student5Name: parsedData.students.student5Name || prev.students.student5Name,
+          student6Id: parsedData.students.student6Id || prev.students.student6Id,
+          student6Name: parsedData.students.student6Name || prev.students.student6Name,
+        },
+      }));
+
+      toast.success('Import thành công!', {
+        description: 'Dữ liệu đã được điền vào form. Bạn có thể chỉnh sửa trước khi submit.',
+        duration: 4000,
+      });
+    } catch (error: any) {
+      toast.error('Lỗi khi import', {
+        description: error.message || 'Không thể đọc file Word',
+        duration: 4000,
+      });
+    } finally {
+      setIsImporting(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const getStatusConfig = (status: string) => {
-    const configs = {
+    const configs: Record<string, { bg: string; text: string; label: string; icon: string }> = {
       SUBMITTED: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Đã nộp', icon: '📄' },
-      APPROVED: { bg: 'bg-green-100', text: 'text-green-700', label: 'Đã duyệt', icon: '✅' },
-      REJECTED: { bg: 'bg-red-100', text: 'text-red-700', label: 'Từ chối', icon: '❌' },
-      PENDING: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Chờ xử lý', icon: '⏳' },
-      DUPLICATE_REJECTED: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Trùng lặp - Từ chối', icon: '⚠️' },
-      DUPLICATE_ACCEPTED: { bg: 'bg-teal-100', text: 'text-teal-700', label: 'Trùng lặp - Chấp nhận', icon: '✓' },
+      DUPLICATE_ACCEPTED: { bg: 'bg-teal-100', text: 'text-teal-700', label: 'Trùng - Chấp nhận', icon: '✓' },
+      REVIEW_1: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Đánh giá 1', icon: '📝' },
+      REVIEW_2: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Đánh giá 2', icon: '📝' },
+      REVIEW_3: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Đánh giá 3', icon: '📝' },
+      DEFENSE: { bg: 'bg-indigo-100', text: 'text-indigo-700', label: 'Bảo vệ', icon: '🎓' },
+      SECOND_DEFENSE: { bg: 'bg-indigo-100', text: 'text-indigo-700', label: 'Bảo vệ lần 2', icon: '🎓' },
+      COMPLETED: { bg: 'bg-green-100', text: 'text-green-700', label: 'Hoàn thành', icon: '✅' },
+      DUPLICATE_REJECTED: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Trùng - Từ chối', icon: '⚠️' },
+      REJECT_BY_ADMIN: { bg: 'bg-red-100', text: 'text-red-700', label: 'Admin từ chối', icon: '❌' },
+      FAILED: { bg: 'bg-red-100', text: 'text-red-700', label: 'Không đạt', icon: '❌' },
     };
-    return configs[status as keyof typeof configs] || configs.PENDING;
+    return configs[status] || { bg: 'bg-gray-100', text: 'text-gray-700', label: status, icon: '📋' };
   };
 
   const formatDate = (dateString: string) => {
@@ -445,36 +556,17 @@ const MentorResourcesPage = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-5 rounded-xl shadow-md border-l-4 border-orange-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Tổng đề tài</p>
-              <p className="text-3xl font-bold text-gray-900">{proposals.length}</p>
-            </div>
-            <div className="text-4xl">📚</div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <div className="bg-white p-5 rounded-xl shadow-md border-l-4 border-blue-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">Đã nộp</p>
               <p className="text-3xl font-bold text-blue-600">
-                {proposals.filter(p => p.status === 'SUBMITTED').length}
+                {proposals.filter(p => SUBMITTED_STATUSES.includes(p.status)).length}
               </p>
+              <p className="text-xs text-gray-500 mt-1">Đang trong quá trình xử lý</p>
             </div>
             <div className="text-4xl">📄</div>
-          </div>
-        </div>
-        <div className="bg-white p-5 rounded-xl shadow-md border-l-4 border-green-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Đã duyệt</p>
-              <p className="text-3xl font-bold text-green-600">
-                {proposals.filter(p => p.status === 'APPROVED').length}
-              </p>
-            </div>
-            <div className="text-4xl">✅</div>
           </div>
         </div>
         <div className="bg-white p-5 rounded-xl shadow-md border-l-4 border-red-500">
@@ -482,8 +574,9 @@ const MentorResourcesPage = () => {
             <div>
               <p className="text-sm text-gray-600 mb-1">Từ chối</p>
               <p className="text-3xl font-bold text-red-600">
-                {proposals.filter(p => p.status === 'REJECTED').length}
+                {proposals.filter(p => REJECTED_STATUSES.includes(p.status)).length}
               </p>
+              <p className="text-xs text-gray-500 mt-1">Cần chỉnh sửa hoặc nộp lại</p>
             </div>
             <div className="text-4xl">❌</div>
           </div>
@@ -493,25 +586,26 @@ const MentorResourcesPage = () => {
       {/* Filters */}
       <div className="bg-white p-4 rounded-xl shadow-md mb-6">
         <div className="flex flex-wrap gap-2">
-          {(['all', 'SUBMITTED', 'APPROVED', 'REJECTED', 'PENDING', 'DUPLICATE_REJECTED', 'DUPLICATE_ACCEPTED'] as const).map((status) => (
-            <button
-              key={status}
-              onClick={() => setSelectedCategory(status)}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                selectedCategory === status
-                  ? 'bg-orange-500 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-orange-100'
-              }`}
-            >
-              {status === 'all' && '🗂️ Tất cả'}
-              {status === 'SUBMITTED' && '📄 Đã nộp'}
-              {status === 'APPROVED' && '✅ Đã duyệt'}
-              {status === 'REJECTED' && '❌ Từ chối'}
-              {status === 'PENDING' && '⏳ Chờ xử lý'}
-              {status === 'DUPLICATE_REJECTED' && '⚠️ Trùng - Từ chối'}
-              {status === 'DUPLICATE_ACCEPTED' && '✓ Trùng - Chấp nhận'}
-            </button>
-          ))}
+          <button
+            onClick={() => setSelectedCategory('submitted')}
+            className={`px-6 py-3 rounded-lg font-medium transition-all ${
+              selectedCategory === 'submitted'
+                ? 'bg-blue-500 text-white shadow-md'
+                : 'bg-gray-100 text-gray-700 hover:bg-blue-100'
+            }`}
+          >
+            📄 Đã nộp
+          </button>
+          <button
+            onClick={() => setSelectedCategory('rejected')}
+            className={`px-6 py-3 rounded-lg font-medium transition-all ${
+              selectedCategory === 'rejected'
+                ? 'bg-red-500 text-white shadow-md'
+                : 'bg-gray-100 text-gray-700 hover:bg-red-100'
+            }`}
+          >
+            ❌ Từ chối
+          </button>
         </div>
       </div>
 
@@ -601,6 +695,23 @@ const MentorResourcesPage = () => {
                       </button>
                     </div>
                   )}
+
+                  {(proposal.status === 'REJECT_BY_ADMIN' || proposal.status === 'FAILED') && (
+                    <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-200">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/proposal-history/${proposal.id}`);
+                        }}
+                        className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition text-sm font-medium flex items-center gap-1"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Xem lịch sử
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -673,9 +784,11 @@ const MentorResourcesPage = () => {
                 student6Id: currentProposal.students?.student6Id || '',
                 student6Name: currentProposal.students?.student6Name || '',
               },
-              semesterId: currentProposal.semester.id,
+              semesterId: currentProposal.semester?.id || 0,
               isAdmin1: false,
               isAdmin2: false,
+              lecturerCode1: currentProposal.lecturerCode1 || user?.lecturerCode || '',
+              lecturerCode2: currentProposal.lecturerCode2 || '',
             });
             
             // Mở lại upload modal để user có thể chỉnh sửa
@@ -739,6 +852,8 @@ const MentorResourcesPage = () => {
                       semesterId: semesters.find(s => s.current)?.id || 0,
                       isAdmin1: false,
                       isAdmin2: false,
+                      lecturerCode1: user?.lecturerCode || '',
+                      lecturerCode2: '',
                     });
                     setStudentCount(1); // Reset student count
                   }}
@@ -752,6 +867,109 @@ const MentorResourcesPage = () => {
             </div>
 
             <form onSubmit={handleUpload} className="p-6 space-y-5">
+              {/* Import từ Word Button */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-dashed border-blue-300 rounded-lg p-4 mb-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Import từ file Word</h3>
+                      <p className="text-sm text-gray-600">
+                        Upload file .docx để tự động điền form nhanh chóng
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isImporting && (
+                      <div className="flex items-center gap-2 text-blue-600">
+                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span className="text-sm">Đang xử lý...</span>
+                      </div>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".doc,.docx"
+                      onChange={handleImportFromWord}
+                      className="hidden"
+                      id="word-file-input"
+                    />
+                    <label
+                      htmlFor="word-file-input"
+                      className={`px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium transition cursor-pointer flex items-center gap-2 ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Chọn file Word
+                    </label>
+                  </div>
+                </div>
+                
+                {/* Hướng dẫn format */}
+                <details className="mt-3">
+                  <summary className="text-sm text-blue-600 cursor-pointer hover:text-blue-700 font-medium">
+                    📝 Xem định dạng file Word mẫu
+                  </summary>
+                  <div className="mt-2 text-xs text-gray-600 bg-white p-3 rounded border border-blue-200">
+                    <pre className="whitespace-pre-wrap font-mono">
+{`Title: Tên đề tài của bạn
+
+Context: Bối cảnh và vấn đề cần giải quyết...
+
+Description: Mô tả chi tiết giải pháp đề xuất...
+
+Functional Requirements:
+- Yêu cầu chức năng 1
+- Yêu cầu chức năng 2
+- Yêu cầu chức năng 3
+
+Non-Functional Requirements:
+- Yêu cầu phi chức năng 1
+- Yêu cầu phi chức năng 2
+
+Students:
+- SE123456: Nguyễn Văn A
+- SE789012: Trần Thị B`}
+                    </pre>
+                  </div>
+                </details>
+              </div>
+
+              {/* Chọn Mentor phụ (lecturerCode2 - optional) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mentor phụ (tùy chọn)</label>
+                <div className="space-y-1">
+                  <select
+                    value={formData.lecturerCode2}
+                    onChange={(e) => setFormData(prev => ({ ...prev, lecturerCode2: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                    disabled={isLoadingLecturers}
+                  >
+                    <option value="">-- Không chọn --</option>
+                    {lecturers.map(l => (
+                      <option key={l.id} value={l.lecturerCode}>{l.fullName} ({l.lecturerCode})</option>
+                    ))}
+                  </select>
+                  {isLoadingLecturers && (
+                    <p className="text-xs text-gray-500">Đang tải danh sách mentor...</p>
+                  )}
+                  {!isLoadingLecturers && lecturers.length === 0 && !lecturersError && (
+                    <p className="text-xs text-gray-500">Không có mentor nào khả dụng.</p>
+                  )}
+                  {lecturersError && (
+                    <div className="text-xs text-red-600">{lecturersError}</div>
+                  )}
+                </div>
+              </div>
+
               {/* Title */}
               <div>
                 <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
@@ -1015,6 +1233,8 @@ const MentorResourcesPage = () => {
                       semesterId: semesters.find(s => s.current)?.id || 0,
                       isAdmin1: false,
                       isAdmin2: false,
+                      lecturerCode1: user?.lecturerCode || '',
+                      lecturerCode2: '',
                     });
                     setStudentCount(1); // Reset student count
                   }}

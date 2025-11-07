@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { CapstoneProposalResponse } from '../../interfaces';
-import { getAllProposals } from '../../services/api';
+import { getAllProposals, getProposalHistory } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 const AllProposalsPage = () => {
@@ -10,7 +10,8 @@ const AllProposalsPage = () => {
   const [projects, setProjects] = useState<CapstoneProposalResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<'all' | CapstoneProposalResponse['status'] | 'reviewed'>('all');
+  const [selectedStatus, setSelectedStatus] = useState<'approved' | 'rejected'>('approved');
+  const [rejectedProposalIds, setRejectedProposalIds] = useState<number[]>([]); // IDs của proposals bị reject bởi admin hiện tại
   const navigate = useNavigate();
 
   // Fetch proposals từ API
@@ -26,6 +27,35 @@ const AllProposalsPage = () => {
         console.log('📥 [ALL_PROPOSALS] Received proposals:', data.length);
         
         setProjects(data);
+        
+        // Fetch history cho các proposal có status REJECT_BY_ADMIN
+        const rejectByAdminProposals = data.filter(p => p.status === 'REJECT_BY_ADMIN');
+        console.log('📥 [ALL_PROPOSALS] REJECT_BY_ADMIN proposals:', rejectByAdminProposals.length);
+        
+        if (rejectByAdminProposals.length > 0) {
+          const rejectedByCurrentAdmin: number[] = [];
+          
+          for (const proposal of rejectByAdminProposals) {
+            try {
+              if (!proposal.id) continue; // Skip nếu proposal không có id
+              
+              const history = await getProposalHistory(proposal.id);
+              console.log(`📜 [HISTORY] Proposal ${proposal.id} history:`, history);
+              
+              // Tìm history entry có adminRejectId = user.id
+              const rejectedByMe = history.find((h: any) => h.adminRejectId === user?.id);
+              if (rejectedByMe) {
+                rejectedByCurrentAdmin.push(proposal.id);
+                console.log(`✅ [REJECTED] Proposal ${proposal.id} rejected by current admin`);
+              }
+            } catch (err) {
+              console.error(`❌ [HISTORY] Error fetching history for proposal ${proposal.id}:`, err);
+            }
+          }
+          
+          setRejectedProposalIds(rejectedByCurrentAdmin);
+          console.log('📊 [REJECTED] Total rejected by me:', rejectedByCurrentAdmin.length);
+        }
       } catch (err: any) {
         console.error('❌ [ALL_PROPOSALS] Error fetching proposals:', err);
         console.error('❌ [ALL_PROPOSALS] Error details:', {
@@ -44,18 +74,26 @@ const AllProposalsPage = () => {
 
   // Filter projects
   const filteredProjects = projects.filter(p => {
-    if (selectedStatus === 'all') return true;
-    if (selectedStatus === 'reviewed') {
-      // Proposals đã được admin hiện tại duyệt
+    if (selectedStatus === 'approved') {
+      // Đã duyệt: Admin hiện tại đã approve (isAdmin = true và adminId = user.id)
       return (p.isAdmin1 && p.admin1Id === user?.id) || (p.isAdmin2 && p.admin2Id === user?.id);
     }
-    return p.status === selectedStatus;
+    
+    if (selectedStatus === 'rejected') {
+      // Đã từ chối: Proposals có status REJECT_BY_ADMIN và adminRejectId = user.id
+      return p.id !== null && rejectedProposalIds.includes(p.id);
+    }
+    
+    return false;
   });
 
-  // Count proposals reviewed by current admin
-  const reviewedByMeCount = projects.filter(p => 
+  // Count proposals approved by current admin
+  const approvedByMeCount = projects.filter(p => 
     (p.isAdmin1 && p.admin1Id === user?.id) || (p.isAdmin2 && p.admin2Id === user?.id)
   ).length;
+
+  // Count proposals rejected by current admin
+  const rejectedByMeCount = rejectedProposalIds.length;
 
   // Helper: Lấy danh sách students
   const getStudentsList = (project: CapstoneProposalResponse): string[] => {
@@ -86,7 +124,13 @@ const AllProposalsPage = () => {
       DUPLICATE_ACCEPTED: { bg: 'bg-teal-100', text: 'text-teal-800', label: 'Trùng - Chấp nhận', icon: '✓' },
       DUPLICATE_REJECTED: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Trùng - Từ chối', icon: '⚠' },
       REJECT_BY_ADMIN: { bg: 'bg-red-100', text: 'text-red-800', label: 'Admin từ chối', icon: '🚫' },
-      REVIEW_1: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Đang duyệt', icon: '👤' },
+      REVIEW_1: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Review 1', icon: '👤' },
+      REVIEW_2: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Review 2', icon: '👥' },
+      REVIEW_3: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Review 3', icon: '👥' },
+      DEFENSE: { bg: 'bg-indigo-100', text: 'text-indigo-800', label: 'Bảo vệ', icon: '🏛️' },
+      SECOND_DEFENSE: { bg: 'bg-indigo-100', text: 'text-indigo-800', label: 'Bảo vệ lần 2', icon: '🏛️' },
+      COMPLETED: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'Hoàn thành', icon: '🎉' },
+      FAILED: { bg: 'bg-gray-200', text: 'text-gray-700', label: 'Thất bại', icon: '�' },
     };
     const config = statusConfig[status];
     return (
@@ -164,7 +208,7 @@ const AllProposalsPage = () => {
       {/* Filters */}
       <div className="bg-white p-4 rounded-xl shadow-md mb-6">
         <div className="flex flex-wrap gap-2">
-          {(['all', 'reviewed', 'SUBMITTED', 'PENDING', 'DUPLICATE_ACCEPTED', 'DUPLICATE_REJECTED', 'APPROVED', 'REJECTED', 'REJECT_BY_ADMIN', 'REVIEW_1'] as const).map((status) => (
+          {(['approved', 'rejected'] as const).map((status) => (
             <button
               key={status}
               onClick={() => setSelectedStatus(status)}
@@ -174,16 +218,8 @@ const AllProposalsPage = () => {
                   : 'bg-gray-100 text-gray-700 hover:bg-orange-100'
               }`}
             >
-              {status === 'all' && `Tất cả (${projects.length})`}
-              {status === 'reviewed' && `Đã duyệt bởi tôi (${reviewedByMeCount})`}
-              {status === 'SUBMITTED' && `Đã nộp (${projects.filter(p => p.status === 'SUBMITTED').length})`}
-              {status === 'PENDING' && `Chờ xử lý (${projects.filter(p => p.status === 'PENDING').length})`}
-              {status === 'APPROVED' && `Đã duyệt (${projects.filter(p => p.status === 'APPROVED').length})`}
-              {status === 'REJECTED' && `Từ chối (${projects.filter(p => p.status === 'REJECTED').length})`}
-              {status === 'DUPLICATE_ACCEPTED' && `Trùng - OK (${projects.filter(p => p.status === 'DUPLICATE_ACCEPTED').length})`}
-              {status === 'DUPLICATE_REJECTED' && `Trùng - Từ chối (${projects.filter(p => p.status === 'DUPLICATE_REJECTED').length})`}
-              {status === 'REJECT_BY_ADMIN' && `Admin từ chối (${projects.filter(p => p.status === 'REJECT_BY_ADMIN').length})`}
-              {status === 'REVIEW_1' && `Đang duyệt (${projects.filter(p => p.status === 'REVIEW_1').length})`}
+              {status === 'approved' && `Đã duyệt bởi tôi (${approvedByMeCount})`}
+              {status === 'rejected' && `Đã từ chối bởi tôi (${rejectedByMeCount})`}
             </button>
           ))}
         </div>

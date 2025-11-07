@@ -2,7 +2,7 @@ import axios from 'axios';
 import type { LoginRequest, LoginResponse, ProfileResponse, User } from '@/interfaces';
 
 // Lấy base URL từ Vite env (VITE_API_BASE_URL). Nếu không có, fallback về localhost
-const AUTH_API_BASE_URL: string = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8080';
+const AUTH_API_BASE_URL: string = (import.meta.env.VITE_API_BASE_URL as string) || 'https://66b7b94833d1.ngrok-free.app';
 
 console.log('🌐 [AUTH_SERVICE] API Base URL:', AUTH_API_BASE_URL);
 console.log('🌐 [AUTH_SERVICE] Raw env:', import.meta.env.VITE_API_BASE_URL);
@@ -101,6 +101,8 @@ export const getStoredUser = (): User | null => {
  * Xóa toàn bộ auth data từ localStorage
  */
 export const clearAuthData = (): void => {
+  console.warn('🚪 [AUTH_SERVICE] Clearing auth data - User logged out');
+  console.trace('Logout called from:'); // Log stack trace để biết ai gọi logout
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);

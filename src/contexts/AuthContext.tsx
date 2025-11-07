@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { User, LoginRequest } from '@/interfaces';
 import * as authService from '@/services/authService';
@@ -16,14 +16,42 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const isInitialized = useRef(false);
+
+  console.log('🔄 [AUTH_PROVIDER] State:', { 
+    hasUser: !!user, 
+    isLoading, 
+    isAuthenticated: !!user,
+    isInitialized: isInitialized.current
+  });
 
   // Khôi phục user từ localStorage khi app khởi động
   useEffect(() => {
+    // Prevent double initialization in React Strict Mode
+    if (isInitialized.current) {
+      console.log('⚠️ [AUTH_CONTEXT] Already initialized - skipping');
+      return;
+    }
+    
+    isInitialized.current = true;
+    
+    console.log('🔄 [AUTH_CONTEXT] Initializing - Checking stored auth data');
     const storedUser = authService.getStoredUser();
     const token = authService.getAccessToken();
     
+    console.log('📦 [AUTH_CONTEXT] Stored data found:', {
+      hasUser: !!storedUser,
+      hasToken: !!token,
+      userId: storedUser?.id,
+      userEmail: storedUser?.email,
+      userRole: storedUser?.role
+    });
+    
     if (storedUser && token) {
+      console.log('✅ [AUTH_CONTEXT] Restoring user session:', storedUser.email);
       setUser(storedUser);
+    } else {
+      console.log('❌ [AUTH_CONTEXT] No valid session found');
     }
     
     setIsLoading(false);
@@ -80,6 +108,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
+    console.log('🚪 [AUTH_CONTEXT] Logout called');
     authService.logout();
     setUser(null);
   };

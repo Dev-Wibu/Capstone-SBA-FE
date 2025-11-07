@@ -10,6 +10,19 @@ export interface User {
   createdAt: string;
 }
 
+export interface Lecturer {
+  id: number;
+  email: string;
+  fullName: string;
+  phoneNumber: string;
+  role: 'MENTOR' | 'ADMIN' | 'LECTURER';
+  status: boolean;
+  lecturerCode: string;
+  createdAt: string;
+  updatedAt: string;
+  councilMemberships: any[];
+}
+
 export interface LoginRequest {
   email: string;
   password: string;
@@ -84,8 +97,16 @@ export interface CapstoneProposal {
   semester: {
     id: number;
   };
+  lecturerCode1: string; // Lecturer hiện tại (từ localStorage)
+  lecturerCode2?: string; // Lecturer phụ (optional)
+  // Thời gian review (mặc định null khi tạo)
+  review1At?: string | null;
+  review2At?: string | null;
+  review3At?: string | null;
   isAdmin1: boolean;
   isAdmin2: boolean;
+  admin1Id?: number | null;
+  admin2Id?: number | null;
 }
 
 export interface CapstoneProposalResponse {
@@ -93,12 +114,20 @@ export interface CapstoneProposalResponse {
   title: string;
   context: string;
   description: string;
-  status: 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'PENDING' | 'DUPLICATE_REJECTED' | 'DUPLICATE_ACCEPTED' | 'REJECT_BY_ADMIN' | 'REVIEW_1';
+  status: 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'PENDING' | 'DUPLICATE_REJECTED' | 'DUPLICATE_ACCEPTED' | 'REJECT_BY_ADMIN' | 'REVIEW_1' | 'REVIEW_2' | 'REVIEW_3' | 'DEFENSE' | 'SECOND_DEFENSE' | 'COMPLETED' | 'FAILED';
   semester: Semester | null;
   attachmentUrl: string | null;
   nonFunc: string[];
   func: string[];
   students?: Students;
+  lecturerCode1?: string;
+  lecturerCode2?: string;
+  review1At: string | null;
+  review2At: string | null;
+  review3At: string | null;
+  lecturerReview1Code?: string | null;
+  lecturerReview2Code?: string | null;
+  lecturerReview3Code?: string | null;
   createdAt: string;
   updatedAt: string;
   // Admin approval flags
