@@ -253,3 +253,23 @@ export const updateProposalReview = async (
   
   await api.put('/api/capstone-proposal/update-review', null, { params });
 };
+
+/**
+ * Cập nhật hệ số ratio
+ * @param id ID cố định (1)
+ * @param ratio Hệ số từ 0.5 đến 1.0
+ */
+export const updateRatio = async (id: number, ratio: number): Promise<void> => {
+  await api.put('/api/capstone-proposal/rate', {
+    id,
+    ratio,
+  });
+};
+
+/**
+ * Lấy hệ số ratio hiện tại
+ */
+export const getRatio = async (): Promise<{ id: number; ratio: number }> => {
+  const response = await api.get('/api/capstone-proposal/rate');
+  return response.data;
+};

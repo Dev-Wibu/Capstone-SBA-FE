@@ -4,6 +4,7 @@ import { getProposalsByAdmin, getAllProposals, reviewProposal } from '../../serv
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
 import { exportAllProposalsToZip } from '../../utils/exportDocx';
+import RatioSettingModal from '../../components/RatioSettingModal';
 
 const AdminPage = () => {
   const { user } = useAuth();
@@ -20,6 +21,9 @@ const AdminPage = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [rejectingProposalId, setRejectingProposalId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Ratio setting modal
+  const [showRatioModal, setShowRatioModal] = useState(false);
 
   // Fetch proposals từ API
   useEffect(() => {
@@ -184,9 +188,18 @@ const AdminPage = () => {
     <div className="max-w-7xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Quản trị hệ thống - Duyệt đề tài
-        </h1>
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Quản trị hệ thống - Duyệt đề tài
+          </h1>
+          <button
+            onClick={() => setShowRatioModal(true)}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center gap-2"
+          >
+            <span>⚙️</span>
+            <span>Cài đặt hệ số</span>
+          </button>
+        </div>
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <span className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-800 rounded-full font-medium">
             <span>✅</span>
@@ -559,6 +572,12 @@ const AdminPage = () => {
           </div>
         </div>
       )}
+
+      {/* Ratio Setting Modal */}
+      <RatioSettingModal
+        isOpen={showRatioModal}
+        onClose={() => setShowRatioModal(false)}
+      />
     </div>
   );
 };
