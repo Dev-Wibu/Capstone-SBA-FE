@@ -26,19 +26,6 @@ api.interceptors.request.use(
     const token = localStorage.getItem('accessToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      // Log khi thêm token vào request (chỉ log 1 lần mỗi 10 giây để tránh spam)
-      const lastLogTime = (window as any).__lastTokenLogTime || 0;
-      const now = Date.now();
-      if (now - lastLogTime > 10000) {
-        console.log('🔑 [API] Token attached to request:', {
-          url: config.url,
-          hasToken: true,
-          tokenPrefix: token.substring(0, 20) + '...'
-        });
-        (window as any).__lastTokenLogTime = now;
-      }
-    } else {
-      console.warn('⚠️ [API] No token found for request:', config.url);
     }
     
     return config;
@@ -62,9 +49,7 @@ api.interceptors.response.use(
       const hasToken = localStorage.getItem('accessToken');
       const isLoginPage = window.location.pathname === '/login';
       
-      // Chỉ logout nếu đang có token và không phải trang login
       if (hasToken && !isLoginPage) {
-        console.warn('⚠️ [API] Token expired or invalid - logging out');
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
@@ -245,14 +230,26 @@ export const getLecturerById = async (id: number): Promise<Lecturer> => {
  * @param proposalId ID của proposal
  * @param date Ngày giờ theo định dạng 'YYYY-MM-DDTHH:mm:ss' (không timezone)
  * @param reviewTime 1 | 2 | 3 tương ứng REVIEW_1/2/3
+ * @param mentorCode1
+ * @param mentorName1 
+ * @param mentorCode2 Mã mentor thứ 2 (tất cả review đều có 2 mentor)
+ * @param mentorName2 Tên mentor thứ 2 (tất cả review đều có 2 mentor)
  */
 export const updateProposalReview = async (
   proposalId: number,
   date: string,
   reviewTime: 1 | 2 | 3,
-  mentorCode?: string
+  mentorCode1?: string,
+  mentorName1?: string,
+  mentorCode2?: string,
+  mentorName2?: string
 ): Promise<void> => {
-  await api.put('/api/capstone-proposal/update-review', null, {
-    params: { proposalId, date, reviewTime, mentorCode },
-  });
+  const params: any = { proposalId, date, reviewTime };
+  
+  if (mentorCode1) params.mentorCode1 = mentorCode1;
+  if (mentorName1) params.mentorName1 = mentorName1;
+  if (mentorCode2) params.mentorCode2 = mentorCode2;
+  if (mentorName2) params.mentorName2 = mentorName2;
+  
+  await api.put('/api/capstone-proposal/update-review', null, { params });
 };

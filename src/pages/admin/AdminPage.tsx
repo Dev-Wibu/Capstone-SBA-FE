@@ -32,19 +32,9 @@ const AdminPage = () => {
         return;
       }
       
-      console.log('📥 [ADMIN] Fetching proposals for admin:', user.id);
       const data = await getProposalsByAdmin(user.id);
-      console.log('✅ [ADMIN] Received proposals:', data.length);
-      console.log('� [ADMIN] Proposals:', data);
-      
       setProjects(data);
     } catch (err: any) {
-      console.error('❌ [ADMIN] Error fetching proposals:', err);
-      console.error('❌ [ADMIN] Error details:', {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status
-      });
       setError('Không thể tải danh sách đề tài: ' + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
@@ -59,21 +49,17 @@ const AdminPage = () => {
 
     try {
       setIsSubmitting(true);
-      console.log('🟢 Approving proposal:', { projectId, adminId: user.id });
       
       await reviewProposal(projectId, true, user.id, 'Chấp nhận');
       
-      console.log('✅ Approval successful');
       toast.success('Đã duyệt đề tài thành công!', {
         description: 'Đề tài đã được phê duyệt',
         duration: 3000,
       });
       
-      // Close modal and refresh list
       setSelectedProject(null);
       await fetchProposals();
     } catch (err: any) {
-      console.error('❌ Error approving proposal:', err);
       toast.error('Lỗi khi duyệt đề tài', {
         description: err.response?.data?.message || err.message || "Có lỗi xảy ra",
         duration: 4000,
@@ -104,28 +90,20 @@ const AdminPage = () => {
 
     try {
       setIsSubmitting(true);
-      console.log('🔴 Rejecting proposal:', { 
-        proposalId: rejectingProposalId, 
-        adminId: user.id, 
-        reason: rejectReason 
-      });
       
       await reviewProposal(rejectingProposalId, false, user.id, rejectReason);
       
-      console.log('✅ Rejection successful');
       toast.success('Đã từ chối đề tài thành công!', {
         description: rejectReason.substring(0, 60) + (rejectReason.length > 60 ? '...' : ''),
         duration: 3000,
       });
       
-      // Close modals and refresh list
       setShowRejectModal(false);
       setRejectingProposalId(null);
       setRejectReason('');
       setSelectedProject(null);
       await fetchProposals();
     } catch (err: any) {
-      console.error('❌ Error rejecting proposal:', err);
       toast.error('Lỗi khi từ chối đề tài', {
         description: err.response?.data?.message || err.message || "Có lỗi xảy ra",
         duration: 4000,

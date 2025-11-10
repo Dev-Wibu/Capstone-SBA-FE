@@ -28,7 +28,6 @@ const ProposalHistoryModal = ({ proposalId, isOpen, onClose }: ProposalHistoryMo
       const data = await getProposalHistory(proposalId);
       setHistory(data);
     } catch (err: any) {
-      console.error('Error fetching proposal history:', err);
       setError(err.response?.data?.message || 'Không thể tải lịch sử proposal');
     } finally {
       setIsLoading(false);

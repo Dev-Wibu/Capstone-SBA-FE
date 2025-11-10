@@ -83,6 +83,25 @@ export interface Students {
   student6Name?: string;
 }
 
+// Reviewer interface (object with fixed keys for review rounds)
+// Review 1: reviewer1 + reviewer2 (2 mentors)
+// Review 2: reviewer3 + reviewer4 (2 mentors)  
+// Review 3: reviewer5 + reviewer6 (2 mentors)
+export interface Reviewer {
+  reviewer1Code: string | null;
+  reviewer1Name: string | null;
+  reviewer2Code: string | null;
+  reviewer2Name: string | null;
+  reviewer3Code: string | null;
+  reviewer3Name: string | null;
+  reviewer4Code: string | null;
+  reviewer4Name: string | null;
+  reviewer5Code: string | null;
+  reviewer5Name: string | null;
+  reviewer6Code: string | null;
+  reviewer6Name: string | null;
+}
+
 // Capstone Proposal interfaces
 export interface CapstoneProposal {
   // Unified payload for both CREATE and UPDATE via POST
@@ -125,15 +144,13 @@ export interface CapstoneProposalResponse {
   review1At: string | null;
   review2At: string | null;
   review3At: string | null;
-  lecturerReview1Code?: string | null;
-  lecturerReview2Code?: string | null;
-  lecturerReview3Code?: string | null;
+  reviewer: Reviewer;
   createdAt: string;
   updatedAt: string;
   // Admin approval flags
-  isAdmin1: boolean;
+  isAdmin1: boolean | null;
   admin1Id: number | null;
-  isAdmin2: boolean;
+  isAdmin2: boolean | null;
   admin2Id: number | null;
 }
 

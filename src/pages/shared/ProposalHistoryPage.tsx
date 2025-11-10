@@ -40,12 +40,10 @@ const ProposalHistoryPage = () => {
       setHistory(historyData);
       setCurrentProposal(proposalData);
       
-      // Tự động chọn version đầu tiên (mới nhất)
       if (historyData.length > 0) {
         setSelectedVersion(historyData[0]);
       }
     } catch (err: any) {
-      console.error('Error fetching proposal history:', err);
       setError(err.response?.data?.message || 'Không thể tải lịch sử proposal');
     } finally {
       setIsLoading(false);
@@ -92,11 +90,10 @@ const ProposalHistoryPage = () => {
       setComparisonData({
         current: entry,
         duplicate: duplicateProposal,
-        distance: 0, // Sẽ tính từ reason nếu có
+        distance: 0,
       });
       setShowComparisonModal(true);
     } catch (error) {
-      console.error('Error fetching duplicate proposal:', error);
     }
   };
 
@@ -387,7 +384,9 @@ const ProposalHistoryPage = () => {
                           <h5 className="font-semibold text-blue-900 mb-1">Thông tin Proposal hiện tại</h5>
                           <div className="text-sm text-blue-700 space-y-1">
                             <p><strong>Trạng thái:</strong> {selectedVersion.capstoneProposal.status}</p>
-                            <p><strong>Học kỳ:</strong> {selectedVersion.capstoneProposal.semester.name} ({selectedVersion.capstoneProposal.semester.semesterCode})</p>
+                            {selectedVersion.capstoneProposal.semester && (
+                              <p><strong>Học kỳ:</strong> {selectedVersion.capstoneProposal.semester.name} ({selectedVersion.capstoneProposal.semester.semesterCode})</p>
+                            )}
                             <p><strong>Cập nhật lần cuối:</strong> {formatDate(selectedVersion.capstoneProposal.updatedAt)}</p>
                           </div>
                         </div>

@@ -169,7 +169,6 @@ export const parseDocxFile = async (file: File): Promise<ParsedProposalData> => 
     
     return parsed;
   } catch (error) {
-    console.error('❌ [DOCX Parser] Error:', error);
     throw new Error('Không thể đọc file Word. Vui lòng kiểm tra định dạng file.');
   }
 };

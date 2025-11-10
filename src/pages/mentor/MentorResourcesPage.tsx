@@ -111,11 +111,7 @@ const MentorResourcesPage = () => {
       const data = await getLecturers();
       const mentors = data.filter(l => l.role === 'MENTOR');
       setLecturers(mentors);
-      if (mentors.length === 0) {
-        console.warn('[Mentors] Không tìm thấy giảng viên có role MENTOR');
-      }
     } catch (error: any) {
-      console.error('Error fetching lecturers:', error);
       setLecturersError(error?.message || 'Không thể tải danh sách mentor');
     } finally {
       setIsLoadingLecturers(false);
@@ -227,7 +223,7 @@ const MentorResourcesPage = () => {
       }
 
       // Build payload: only include id if it exists (for update)
-      const basePayload = {
+      const basePayload: any = {
         title: formData.title,
         context: formData.context,
         description: formData.description,
@@ -240,17 +236,15 @@ const MentorResourcesPage = () => {
         isAdmin1: formData.isAdmin1,
         isAdmin2: formData.isAdmin2,
         lecturerCode1: formData.lecturerCode1,
-        lecturerCode2: formData.lecturerCode2 || undefined,
-        review1At: null,
-        review2At: null,
-        review3At: null,
-        admin1Id: null,
-        admin2Id: null,
       };
-      
-      const payload = formData.id ? { ...basePayload, id: formData.id } : { ...basePayload, id: null };
 
-      // Unified POST endpoint for both create (id=null) and update (id>0)
+      // Chỉ thêm lecturerCode2 nếu có giá trị
+      if (formData.lecturerCode2 && formData.lecturerCode2.trim() !== '') {
+        basePayload.lecturerCode2 = formData.lecturerCode2;
+      }
+      
+      const payload = formData.id ? { ...basePayload, id: formData.id } : basePayload;
+
       await createProposal(payload);
       
       // Reset form và đóng modal
@@ -389,7 +383,6 @@ const MentorResourcesPage = () => {
           });
         }
       } else {
-        // Lỗi khác
         const message = error.response?.data?.message || error.message || 'Upload thất bại. Vui lòng thử lại!';
         setAlertConfig({
           isOpen: true,
@@ -806,6 +799,7 @@ const MentorResourcesPage = () => {
           setSelectedProposal(null);
         }}
         onUploadAgain={handleUploadAgain}
+        onRefresh={fetchProposalsData}
       />
 
       {/* Add Semester Modal */}
@@ -954,9 +948,12 @@ Students:
                     disabled={isLoadingLecturers}
                   >
                     <option value="">-- Không chọn --</option>
-                    {lecturers.map(l => (
-                      <option key={l.id} value={l.lecturerCode}>{l.fullName} ({l.lecturerCode})</option>
-                    ))}
+                    {lecturers
+                      .filter(l => l.lecturerCode !== user?.lecturerCode) // Loại trừ user hiện tại
+                      .map(l => (
+                        <option key={l.id} value={l.lecturerCode}>{l.fullName} ({l.lecturerCode})</option>
+                      ))
+                    }
                   </select>
                   {isLoadingLecturers && (
                     <p className="text-xs text-gray-500">Đang tải danh sách mentor...</p>

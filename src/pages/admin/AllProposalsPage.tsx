@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { CapstoneProposalResponse } from '../../interfaces';
 import { getAllProposals, getProposalHistory } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import ProposalDetailModal from '../../components/ProposalDetailModal';
 
 const AllProposalsPage = () => {
   const { user } = useAuth();
@@ -16,71 +17,52 @@ const AllProposalsPage = () => {
 
   // Fetch proposals từ API
   useEffect(() => {
-    const fetchProposals = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        console.log('📥 [ALL_PROPOSALS] Fetching all proposals...');
-        console.log('📥 [ALL_PROPOSALS] Current admin ID:', user?.id);
-        const data = await getAllProposals();
-        console.log('📥 [ALL_PROPOSALS] Received proposals:', data.length);
-        
-        setProjects(data);
-        
-        // Fetch history cho các proposal có status REJECT_BY_ADMIN
-        const rejectByAdminProposals = data.filter(p => p.status === 'REJECT_BY_ADMIN');
-        console.log('📥 [ALL_PROPOSALS] REJECT_BY_ADMIN proposals:', rejectByAdminProposals.length);
-        
-        if (rejectByAdminProposals.length > 0) {
-          const rejectedByCurrentAdmin: number[] = [];
-          
-          for (const proposal of rejectByAdminProposals) {
-            try {
-              if (!proposal.id) continue; // Skip nếu proposal không có id
-              
-              const history = await getProposalHistory(proposal.id);
-              console.log(`📜 [HISTORY] Proposal ${proposal.id} history:`, history);
-              
-              // Tìm history entry có adminRejectId = user.id
-              const rejectedByMe = history.find((h: any) => h.adminRejectId === user?.id);
-              if (rejectedByMe) {
-                rejectedByCurrentAdmin.push(proposal.id);
-                console.log(`✅ [REJECTED] Proposal ${proposal.id} rejected by current admin`);
-              }
-            } catch (err) {
-              console.error(`❌ [HISTORY] Error fetching history for proposal ${proposal.id}:`, err);
-            }
-          }
-          
-          setRejectedProposalIds(rejectedByCurrentAdmin);
-          console.log('📊 [REJECTED] Total rejected by me:', rejectedByCurrentAdmin.length);
-        }
-      } catch (err: any) {
-        console.error('❌ [ALL_PROPOSALS] Error fetching proposals:', err);
-        console.error('❌ [ALL_PROPOSALS] Error details:', {
-          message: err.message,
-          response: err.response?.data,
-          status: err.response?.status
-        });
-        setError('Không thể tải danh sách đề tài: ' + (err.response?.data?.message || err.message));
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchProposals();
   }, [user?.id]);
+
+  const fetchProposals = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const data = await getAllProposals();
+      setProjects(data);
+      
+      const rejectByAdminProposals = data.filter(p => p.status === 'REJECT_BY_ADMIN');
+      
+      if (rejectByAdminProposals.length > 0) {
+        const rejectedByCurrentAdmin: number[] = [];
+        
+        for (const proposal of rejectByAdminProposals) {
+          try {
+            if (!proposal.id) continue;
+            
+            const history = await getProposalHistory(proposal.id);
+            
+            const rejectedByMe = history.find((h: any) => h.adminRejectId === user?.id);
+            if (rejectedByMe) {
+              rejectedByCurrentAdmin.push(proposal.id);
+            }
+          } catch (err) {
+          }
+        }
+        
+        setRejectedProposalIds(rejectedByCurrentAdmin);
+      }
+    } catch (err: any) {
+      setError('Không thể tải danh sách đề tài: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Filter projects
   const filteredProjects = projects.filter(p => {
     if (selectedStatus === 'approved') {
-      // Đã duyệt: Admin hiện tại đã approve (isAdmin = true và adminId = user.id)
       return (p.isAdmin1 && p.admin1Id === user?.id) || (p.isAdmin2 && p.admin2Id === user?.id);
     }
     
     if (selectedStatus === 'rejected') {
-      // Đã từ chối: Proposals có status REJECT_BY_ADMIN và adminRejectId = user.id
       return p.id !== null && rejectedProposalIds.includes(p.id);
     }
     
@@ -315,134 +297,14 @@ const AllProposalsPage = () => {
         </div>
       )}
 
-      {/* Detail Modal */}
-      {selectedProject && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 p-6">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                    {selectedProject.title}
-                  </h2>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {getStatusBadge(selectedProject.status)}
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedProject(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Context */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>📌</span>
-                  <span>Bối cảnh</span>
-                </h3>
-                <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedProject.context}</p>
-              </div>
-
-              {/* Description */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>📝</span>
-                  <span>Mô tả chi tiết</span>
-                </h3>
-                <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedProject.description}</p>
-              </div>
-
-              {/* Functional Requirements */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>⚙️</span>
-                  <span>Yêu cầu chức năng ({selectedProject.func.length})</span>
-                </h3>
-                <ul className="space-y-2">
-                  {selectedProject.func.map((item, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-gray-700 bg-blue-50 p-2 rounded">
-                      <span className="text-blue-600 font-bold mt-0.5">{idx + 1}.</span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Non-Functional Requirements */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>🎯</span>
-                  <span>Yêu cầu phi chức năng ({selectedProject.nonFunc.length})</span>
-                </h3>
-                <ul className="space-y-2">
-                  {selectedProject.nonFunc.map((item, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-gray-700 bg-purple-50 p-2 rounded">
-                      <span className="text-purple-600 font-bold mt-0.5">{idx + 1}.</span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Students */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>👥</span>
-                  <span>Thành viên nhóm</span>
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {getStudentsList(selectedProject).map((student, idx) => (
-                    <div key={idx} className="flex items-center gap-2 bg-orange-50 px-3 py-2 rounded-lg">
-                      <span className="w-6 h-6 bg-orange-200 rounded-full flex items-center justify-center text-xs font-bold text-orange-800">
-                        {idx + 1}
-                      </span>
-                      <span className="text-sm font-medium text-gray-700">{student}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Semester Info */}
-              {selectedProject.semester && (
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                    <span>📅</span>
-                    <span>Thông tin học kỳ</span>
-                  </h3>
-                  <div className="bg-gray-50 p-3 rounded-lg text-sm">
-                    <p><span className="font-medium">Tên:</span> {selectedProject.semester.name}</p>
-                    <p><span className="font-medium">Mã:</span> {selectedProject.semester.semesterCode}</p>
-                    <p><span className="font-medium">Năm học:</span> {selectedProject.semester.year}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* View History Button */}
-              <div className="flex gap-3 pt-4 border-t">
-                <button
-                  onClick={() => {
-                    setSelectedProject(null);
-                    navigate(`/proposal-history/${selectedProject.id}`);
-                  }}
-                  className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Xem lịch sử thay đổi
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Detail Modal - Use ProposalDetailModal component */}
+      {/* Detail Modal - Use ProposalDetailModal component */}
+      <ProposalDetailModal
+        proposal={selectedProject}
+        isOpen={!!selectedProject}
+        onClose={() => setSelectedProject(null)}
+        onRefresh={fetchProposals}
+      />
     </div>
   );
 };

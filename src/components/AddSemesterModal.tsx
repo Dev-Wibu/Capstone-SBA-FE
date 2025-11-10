@@ -45,13 +45,8 @@ const AddSemesterModal = ({ isOpen, onClose, onSuccess }: AddSemesterModalProps)
         endDate: endDateISO,
       };
 
-      console.log('Sending payload:', payload);
+      await createSemester(payload);
 
-      const result = await createSemester(payload);
-
-      console.log('Created semester:', result);
-
-      // Reset form
       setFormData({
         name: '',
         semesterCode: '',
@@ -65,7 +60,6 @@ const AddSemesterModal = ({ isOpen, onClose, onSuccess }: AddSemesterModalProps)
       onSuccess();
       onClose();
     } catch (error) {
-      console.error('Error creating semester:', error);
       alert('Thêm học kỳ thất bại. Vui lòng thử lại!');
     } finally {
       setIsLoading(false);
