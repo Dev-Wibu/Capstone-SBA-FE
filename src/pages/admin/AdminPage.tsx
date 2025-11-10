@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { CapstoneProposalResponse } from '../../interfaces';
-import { getProposalsByAdmin, getAllProposals, reviewProposal } from '../../services/api';
+import { getAllProposals } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
 import { exportAllProposalsToZip } from '../../utils/exportDocx';
@@ -10,17 +10,9 @@ const AdminPage = () => {
   const { user } = useAuth();
   const [selectedProject, setSelectedProject] = useState<CapstoneProposalResponse | null>(null);
   const [projects, setProjects] = useState<CapstoneProposalResponse[]>([]);
-  const [allProjects, setAllProjects] = useState<CapstoneProposalResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filterMode, setFilterMode] = useState<'pending' | 'all'>('pending');
   const [isDownloading, setIsDownloading] = useState(false);
-  
-  // Reject modal states
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
-  const [rejectingProposalId, setRejectingProposalId] = useState<number | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Ratio setting modal
   const [showRatioModal, setShowRatioModal] = useState(false);
@@ -40,13 +32,9 @@ const AdminPage = () => {
         return;
       }
       
-      // Always fetch pending proposals
-      const pendingData = await getProposalsByAdmin(user.id);
-      setProjects(pendingData);
-      
-      // Fetch all proposals for the "all" filter
+      // Fetch all proposals
       const allData = await getAllProposals();
-      setAllProjects(allData);
+      setProjects(allData);
     } catch (err: any) {
       setError('Không thể tải danh sách đề tài: ' + (err.response?.data?.message || err.message));
     } finally {
@@ -54,85 +42,12 @@ const AdminPage = () => {
     }
   };
 
-  const handleApprove = async (projectId: number) => {
-    if (!user?.id) {
-      toast.error('Không tìm thấy thông tin admin');
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      
-      await reviewProposal(projectId, true, user.id, 'Chấp nhận');
-      
-      toast.success('Đã duyệt đề tài thành công!', {
-        description: 'Đề tài đã được phê duyệt',
-        duration: 3000,
-      });
-      
-      setSelectedProject(null);
-      await fetchProposals();
-    } catch (err: any) {
-      toast.error('Lỗi khi duyệt đề tài', {
-        description: err.response?.data?.message || err.message || "Có lỗi xảy ra",
-        duration: 4000,
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const openRejectModal = (projectId: number) => {
-    setRejectingProposalId(projectId);
-    setRejectReason('');
-    setShowRejectModal(true);
-  };
-
-  const handleRejectSubmit = async () => {
-    if (!user?.id) {
-      toast.error('Không tìm thấy thông tin admin');
-      return;
-    }
-
-    if (!rejectReason.trim()) {
-      toast.warning('Vui lòng nhập lý do từ chối');
-      return;
-    }
-
-    if (!rejectingProposalId) return;
-
-    try {
-      setIsSubmitting(true);
-      
-      await reviewProposal(rejectingProposalId, false, user.id, rejectReason);
-      
-      toast.success('Đã từ chối đề tài thành công!', {
-        description: rejectReason.substring(0, 60) + (rejectReason.length > 60 ? '...' : ''),
-        duration: 3000,
-      });
-      
-      setShowRejectModal(false);
-      setRejectingProposalId(null);
-      setRejectReason('');
-      setSelectedProject(null);
-      await fetchProposals();
-    } catch (err: any) {
-      toast.error('Lỗi khi từ chối đề tài', {
-        description: err.response?.data?.message || err.message || "Có lỗi xảy ra",
-        duration: 4000,
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleDownloadAll = async () => {
     try {
       setIsDownloading(true);
-      const dataToDownload = filterMode === 'pending' ? projects : allProjects;
-      await exportAllProposalsToZip(dataToDownload);
+      await exportAllProposalsToZip(projects);
       toast.success('Tải xuống thành công!', {
-        description: `Đã tải ${dataToDownload.length} đề tài`,
+        description: `Đã tải ${projects.length} đề tài`,
         duration: 3000,
       });
     } catch (err: any) {
@@ -214,33 +129,10 @@ const AdminPage = () => {
       </div>
 
       {/* Filter and Download Controls */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="flex gap-2">
-          <button
-            onClick={() => setFilterMode('pending')}
-            className={`px-4 py-2 rounded-lg font-medium transition ${
-              filterMode === 'pending'
-                ? 'bg-orange-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            Chờ duyệt ({projects.length})
-          </button>
-          <button
-            onClick={() => setFilterMode('all')}
-            className={`px-4 py-2 rounded-lg font-medium transition ${
-              filterMode === 'all'
-                ? 'bg-orange-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            Tất cả ({allProjects.length})
-          </button>
-        </div>
-        
+      <div className="mb-6 flex items-center justify-end">
         <button
           onClick={handleDownloadAll}
-          disabled={isDownloading || (filterMode === 'pending' ? projects.length === 0 : allProjects.length === 0)}
+          disabled={isDownloading || projects.length === 0}
           className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
           {isDownloading ? (
@@ -260,21 +152,15 @@ const AdminPage = () => {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-6 max-w-md">
         <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-xl shadow-lg text-white">
-          <p className="text-sm text-orange-100 mb-2">
-            {filterMode === 'pending' ? 'Tổng đề tài chờ duyệt' : 'Tổng tất cả đề tài'}
-          </p>
-          <p className="text-4xl font-bold">
-            {filterMode === 'pending' ? projects.length : allProjects.length}
-          </p>
-          <p className="text-xs text-orange-100 mt-2">
-            {filterMode === 'pending' ? 'Đã qua kiểm tra trùng lặp' : 'Trong hệ thống'}
-          </p>
+          <p className="text-sm text-orange-100 mb-2">Tổng tất cả đề tài</p>
+          <p className="text-4xl font-bold">{projects.length}</p>
+          <p className="text-xs text-orange-100 mt-2">Trong hệ thống</p>
         </div>
       </div>
 
       {/* Projects List */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {(filterMode === 'pending' ? projects : allProjects).map((project) => {
+        {projects.map((project) => {
           const students = getStudentsList(project);
           
           return (
@@ -339,31 +225,12 @@ const AdminPage = () => {
 
                 {/* Action Buttons */}
                 <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200">
-                  {filterMode === 'pending' ? (
-                    <>
-                      <button
-                        onClick={() => handleApprove(project.id!)}
-                        disabled={isSubmitting}
-                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        ✓ Duyệt
-                      </button>
-                      <button
-                        onClick={() => openRejectModal(project.id!)}
-                        disabled={isSubmitting}
-                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        ✗ Từ chối
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setSelectedProject(project)}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
-                    >
-                      Xem chi tiết
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setSelectedProject(project)}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                  >
+                    Xem chi tiết
+                  </button>
                 </div>
               </div>
             </div>
@@ -371,15 +238,11 @@ const AdminPage = () => {
         })}
       </div>
 
-      {(filterMode === 'pending' ? projects.length === 0 : allProjects.length === 0) && (
+      {projects.length === 0 && (
         <div className="text-center py-12">
           <div className="text-gray-400 text-6xl mb-4">📋</div>
-          <p className="text-gray-500 text-lg font-medium mb-2">
-            {filterMode === 'pending' ? 'Không có đề tài nào cần duyệt' : 'Không có đề tài nào trong hệ thống'}
-          </p>
-          <p className="text-gray-400 text-sm">
-            {filterMode === 'pending' ? 'Tất cả đề tài đã được xử lý hoặc chưa có đề tài mới' : 'Vui lòng quay lại sau'}
-          </p>
+          <p className="text-gray-500 text-lg font-medium mb-2">Không có đề tài nào trong hệ thống</p>
+          <p className="text-gray-400 text-sm">Vui lòng quay lại sau</p>
         </div>
       )}
 
@@ -494,80 +357,6 @@ const AdminPage = () => {
                   </div>
                 </div>
               )}
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-4 border-t">
-                <button
-                  onClick={() => handleApprove(selectedProject.id!)}
-                  disabled={isSubmitting}
-                  className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? 'Đang xử lý...' : '✓ Duyệt đồ án'}
-                </button>
-                <button
-                  onClick={() => openRejectModal(selectedProject.id!)}
-                  disabled={isSubmitting}
-                  className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  ✗ Từ chối
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Reject Modal */}
-      {showRejectModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <span className="text-2xl">⚠️</span>
-                <span>Từ chối đề tài</span>
-              </h3>
-            </div>
-            
-            <div className="p-6 space-y-4">
-              <p className="text-gray-600">
-                Vui lòng nhập lý do từ chối đề tài này:
-              </p>
-              
-              <textarea
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Nhập lý do từ chối..."
-                rows={5}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
-                disabled={isSubmitting}
-              />
-              
-              {rejectReason.trim() && (
-                <p className="text-sm text-gray-500">
-                  Số ký tự: {rejectReason.length}
-                </p>
-              )}
-            </div>
-            
-            <div className="p-6 border-t border-gray-200 flex gap-3">
-              <button
-                onClick={() => {
-                  setShowRejectModal(false);
-                  setRejectingProposalId(null);
-                  setRejectReason('');
-                }}
-                disabled={isSubmitting}
-                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={handleRejectSubmit}
-                disabled={isSubmitting || !rejectReason.trim()}
-                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? 'Đang xử lý...' : 'Xác nhận từ chối'}
-              </button>
             </div>
           </div>
         </div>
