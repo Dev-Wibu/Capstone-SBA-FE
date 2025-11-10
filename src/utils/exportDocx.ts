@@ -1,5 +1,6 @@
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, convertInchesToTwip } from 'docx';
 import { saveAs } from 'file-saver';
+import JSZip from 'jszip';
 import type { CapstoneProposalResponse } from '@/interfaces';
 
 export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) => {
@@ -29,11 +30,11 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
           new Paragraph({
             children: [
               new TextRun({
-                text: 'HỌC KỲ: ',
+                text: 'SEMESTER: ',
                 bold: true,
               }),
               new TextRun({
-                text: proposal.semester ? `${proposal.semester.name} - ${proposal.semester.semesterCode} (${proposal.semester.year})` : 'Chưa có học kỳ',
+                text: proposal.semester ? `${proposal.semester.name} - ${proposal.semester.semesterCode} (${proposal.semester.year})` : 'Not defined',
               }),
             ],
             spacing: { after: 200 },
@@ -43,7 +44,7 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
           new Paragraph({
             children: [
               new TextRun({
-                text: 'ID ĐỀ TÀI: ',
+                text: 'PROPOSAL ID: ',
                 bold: true,
               }),
               new TextRun({
@@ -57,7 +58,7 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
           new Paragraph({
             children: [
               new TextRun({
-                text: 'TRẠNG THÁI: ',
+                text: 'STATUS: ',
                 bold: true,
               }),
               new TextRun({
@@ -69,7 +70,7 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
 
           // Context Section
           new Paragraph({
-            text: '1. BỐI CẢNH',
+            text: '1. Context & Problem Statement',
             heading: HeadingLevel.HEADING_2,
             spacing: { before: 300, after: 200 },
           }),
@@ -80,7 +81,7 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
 
           // Description Section
           new Paragraph({
-            text: '2. MÔ TẢ CHI TIẾT',
+            text: '2. Description',
             heading: HeadingLevel.HEADING_2,
             spacing: { before: 300, after: 200 },
           }),
@@ -91,43 +92,35 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
 
           // Functional Requirements
           new Paragraph({
-            text: '3. YÊU CẦU CHỨC NĂNG',
+            text: '3. Functional Requirements',
             heading: HeadingLevel.HEADING_2,
             spacing: { before: 300, after: 200 },
           }),
           ...proposal.func.map(
-            (item, index) =>
+            (item) =>
               new Paragraph({
-                text: `${index + 1}. ${item}`,
+                text: item,
                 spacing: { after: 150 },
-                numbering: {
-                  reference: 'functional-requirements',
-                  level: 0,
-                },
               })
           ),
 
           // Non-Functional Requirements
           new Paragraph({
-            text: '4. YÊU CẦU PHI CHỨC NĂNG',
+            text: '4. Non-Functional Requirements',
             heading: HeadingLevel.HEADING_2,
             spacing: { before: 300, after: 200 },
           }),
           ...proposal.nonFunc.map(
-            (item, index) =>
+            (item) =>
               new Paragraph({
-                text: `${index + 1}. ${item}`,
+                text: item,
                 spacing: { after: 150 },
-                numbering: {
-                  reference: 'non-functional-requirements',
-                  level: 0,
-                },
               })
           ),
 
           // Students Section
           new Paragraph({
-            text: '5. THÀNH VIÊN NHÓM',
+            text: '5. Team Members',
             heading: HeadingLevel.HEADING_2,
             spacing: { before: 300, after: 200 },
           }),
@@ -158,22 +151,22 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
                   spacing: { after: 100 },
                 }),
               ].filter(Boolean)
-            : [new Paragraph({ text: 'Không có thông tin thành viên' })]) as Paragraph[],
+            : [new Paragraph({ text: 'No team members information available' })]) as Paragraph[],
 
           // Mentors Section
           new Paragraph({
-            text: '6. GIẢNG VIÊN HƯỚNG DẪN',
+            text: '6. Supervising Lecturers',
             heading: HeadingLevel.HEADING_2,
             spacing: { before: 300, after: 200 },
           }),
           new Paragraph({
             children: [
               new TextRun({
-                text: 'Giảng viên 1: ',
+                text: 'Lecturer 1: ',
                 bold: true,
               }),
               new TextRun({
-                text: proposal.lecturerCode1 || 'Chưa có thông tin',
+                text: proposal.lecturerCode1 || 'No information',
               }),
             ],
             spacing: { after: 100 },
@@ -182,7 +175,7 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
             new Paragraph({
               children: [
                 new TextRun({
-                  text: 'Giảng viên 2: ',
+                  text: 'Lecturer 2: ',
                   bold: true,
                 }),
                 new TextRun({
@@ -196,7 +189,7 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
           // Review Schedule Section (if any)
           ...(proposal.review1At || proposal.review2At || proposal.review3At ? [
             new Paragraph({
-              text: '7. LỊCH REVIEW',
+              text: '7. Review Schedule',
               heading: HeadingLevel.HEADING_2,
               spacing: { before: 300, after: 200 },
             }),
@@ -208,15 +201,15 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
                     bold: true,
                   }),
                   new TextRun({
-                    text: new Date(proposal.review1At).toLocaleString('vi-VN'),
+                    text: new Date(proposal.review1At).toLocaleString('en-US'),
                   }),
-                  ...(proposal.lecturerReview1Code ? [
+                  ...(proposal.reviewer.reviewer1Code ? [
                     new TextRun({
-                      text: ' - Mentor: ',
+                      text: ' - Reviewer: ',
                       bold: true,
                     }),
                     new TextRun({
-                      text: proposal.lecturerReview1Code,
+                      text: proposal.reviewer.reviewer1Code,
                     }),
                   ] : []),
                 ],
@@ -231,15 +224,15 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
                     bold: true,
                   }),
                   new TextRun({
-                    text: new Date(proposal.review2At).toLocaleString('vi-VN'),
+                    text: new Date(proposal.review2At).toLocaleString('en-US'),
                   }),
-                  ...(proposal.lecturerReview2Code ? [
+                  ...(proposal.reviewer.reviewer2Code ? [
                     new TextRun({
-                      text: ' - Mentor: ',
+                      text: ' - Reviewer: ',
                       bold: true,
                     }),
                     new TextRun({
-                      text: proposal.lecturerReview2Code,
+                      text: proposal.reviewer.reviewer2Code,
                     }),
                   ] : []),
                 ],
@@ -254,15 +247,15 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
                     bold: true,
                   }),
                   new TextRun({
-                    text: new Date(proposal.review3At).toLocaleString('vi-VN'),
+                    text: new Date(proposal.review3At).toLocaleString('en-US'),
                   }),
-                  ...(proposal.lecturerReview3Code ? [
+                  ...(proposal.reviewer.reviewer3Code ? [
                     new TextRun({
-                      text: ' - Mentor: ',
+                      text: ' - Reviewer: ',
                       bold: true,
                     }),
                     new TextRun({
-                      text: proposal.lecturerReview3Code,
+                      text: proposal.reviewer.reviewer3Code,
                     }),
                   ] : []),
                 ],
@@ -279,11 +272,11 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
           new Paragraph({
             children: [
               new TextRun({
-                text: 'Ngày tạo: ',
+                text: 'Created Date: ',
                 bold: true,
               }),
               new TextRun({
-                text: new Date(proposal.createdAt).toLocaleString('vi-VN'),
+                text: new Date(proposal.createdAt).toLocaleString('en-US'),
               }),
             ],
           }),
@@ -322,4 +315,448 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
   const blob = await Packer.toBlob(doc);
   const fileName = `${proposal.title.replace(/[^a-z0-9]/gi, '_')}_${proposal.id}.docx`;
   saveAs(blob, fileName);
+};
+
+export const exportProposalTemplate = async () => {
+  const doc = new Document({
+    sections: [
+      {
+        properties: {
+          page: {
+            margin: {
+              top: convertInchesToTwip(1),
+              right: convertInchesToTwip(1),
+              bottom: convertInchesToTwip(1),
+              left: convertInchesToTwip(1),
+            },
+          },
+        },
+        children: [
+          new Paragraph({
+            text: 'CAPSTONE PROJECT PROPOSAL TEMPLATE',
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 },
+          }),
+
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: 'Hướng dẫn: Điền đầy đủ các phần theo format bên dưới. Hệ thống sẽ tự động phân tích file này.',
+                italics: true,
+                color: '666666',
+                size: 20,
+              }),
+            ],
+            spacing: { after: 400 },
+          }),
+
+          new Paragraph({
+            text: 'Title:',
+            heading: HeadingLevel.HEADING_2,
+            spacing: { after: 200 },
+          }),
+          new Paragraph({
+            text: '',
+            spacing: { after: 400 },
+          }),
+
+          new Paragraph({
+            text: 'Context:',
+            heading: HeadingLevel.HEADING_2,
+            spacing: { after: 200 },
+          }),
+          new Paragraph({
+            text: '',
+            spacing: { after: 400 },
+          }),
+
+          new Paragraph({
+            text: 'Description:',
+            heading: HeadingLevel.HEADING_2,
+            spacing: { after: 200 },
+          }),
+          new Paragraph({
+            text: '',
+            spacing: { after: 400 },
+          }),
+
+          new Paragraph({
+            text: 'Functional Requirements:',
+            heading: HeadingLevel.HEADING_2,
+            spacing: { after: 200 },
+          }),
+          new Paragraph({
+            text: '-',
+            spacing: { after: 100 },
+          }),
+          new Paragraph({
+            text: '-',
+            spacing: { after: 100 },
+          }),
+          new Paragraph({
+            text: '-',
+            spacing: { after: 400 },
+          }),
+
+          new Paragraph({
+            text: 'Non-Functional Requirements:',
+            heading: HeadingLevel.HEADING_2,
+            spacing: { after: 200 },
+          }),
+          new Paragraph({
+            text: '-',
+            spacing: { after: 100 },
+          }),
+          new Paragraph({
+            text: '-',
+            spacing: { after: 400 },
+          }),
+
+          new Paragraph({
+            text: 'Students:',
+            heading: HeadingLevel.HEADING_2,
+            spacing: { after: 200 },
+          }),
+          new Paragraph({
+            text: '- SE######: Họ và Tên',
+            spacing: { after: 100 },
+          }),
+          new Paragraph({
+            text: '- SE######: Họ và Tên',
+            spacing: { after: 100 },
+          }),
+          new Paragraph({
+            text: '- SE######: Họ và Tên',
+            spacing: { after: 400 },
+          }),
+
+          new Paragraph({
+            text: 'Lưu ý:',
+            heading: HeadingLevel.HEADING_3,
+            spacing: { after: 100 },
+          }),
+          new Paragraph({
+            text: '• Các yêu cầu phải bắt đầu bằng dấu "-"',
+            spacing: { after: 100 },
+          }),
+          new Paragraph({
+            text: '• Danh sách sinh viên: MSSV: Họ tên',
+            spacing: { after: 100 },
+          }),
+          new Paragraph({
+            text: '• Tất cả các phần đều phải có dữ liệu',
+            spacing: { after: 100 },
+          }),
+        ],
+      },
+    ],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  saveAs(blob, 'Capstone_Proposal_Template.docx');
+};
+
+export const exportAllProposalsToZip = async (proposals: CapstoneProposalResponse[]) => {
+  if (proposals.length === 0) {
+    alert('Không có đề tài nào để tải xuống');
+    return;
+  }
+
+  const zip = new JSZip();
+  
+  try {
+    for (const proposal of proposals) {
+      const doc = new Document({
+        sections: [
+          {
+            properties: {
+              page: {
+                margin: {
+                  top: convertInchesToTwip(1),
+                  right: convertInchesToTwip(1),
+                  bottom: convertInchesToTwip(1),
+                  left: convertInchesToTwip(1),
+                },
+              },
+            },
+            children: [
+              // Title
+              new Paragraph({
+                text: proposal.title.toUpperCase(),
+                heading: HeadingLevel.HEADING_1,
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 400 },
+              }),
+
+              // Semester Info
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: 'SEMESTER: ',
+                    bold: true,
+                  }),
+                  new TextRun({
+                    text: proposal.semester ? `${proposal.semester.name} - ${proposal.semester.semesterCode} (${proposal.semester.year})` : 'Not defined',
+                  }),
+                ],
+                spacing: { after: 200 },
+              }),
+
+              // ID
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: 'PROPOSAL ID: ',
+                    bold: true,
+                  }),
+                  new TextRun({
+                    text: `#${proposal.id}`,
+                  }),
+                ],
+                spacing: { after: 200 },
+              }),
+
+              // Status
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: 'STATUS: ',
+                    bold: true,
+                  }),
+                  new TextRun({
+                    text: proposal.status,
+                  }),
+                ],
+                spacing: { after: 400 },
+              }),
+
+              // Context Section
+              new Paragraph({
+                text: '1. Context & Problem Statement',
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 300, after: 200 },
+              }),
+              new Paragraph({
+                text: proposal.context,
+                spacing: { after: 400 },
+              }),
+
+              // Description Section
+              new Paragraph({
+                text: '2. Description',
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 300, after: 200 },
+              }),
+              new Paragraph({
+                text: proposal.description,
+                spacing: { after: 400 },
+              }),
+
+              // Functional Requirements
+              new Paragraph({
+                text: '3. Functional Requirements',
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 300, after: 200 },
+              }),
+              ...proposal.func.map(
+                (item) =>
+                  new Paragraph({
+                    text: item,
+                    spacing: { after: 150 },
+                  })
+              ),
+
+              // Non-Functional Requirements
+              new Paragraph({
+                text: '4. Non-Functional Requirements',
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 300, after: 200 },
+              }),
+              ...proposal.nonFunc.map(
+                (item) =>
+                  new Paragraph({
+                    text: item,
+                    spacing: { after: 150 },
+                  })
+              ),
+
+              // Students Section
+              new Paragraph({
+                text: '5. Team Members',
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 300, after: 200 },
+              }),
+              ...(proposal.students
+                ? [
+                    proposal.students.student1Name && new Paragraph({
+                      text: `1. ${proposal.students.student1Name}`,
+                      spacing: { after: 100 },
+                    }),
+                    proposal.students.student2Name && new Paragraph({
+                      text: `2. ${proposal.students.student2Name}`,
+                      spacing: { after: 100 },
+                    }),
+                    proposal.students.student3Name && new Paragraph({
+                      text: `3. ${proposal.students.student3Name}`,
+                      spacing: { after: 100 },
+                    }),
+                    proposal.students.student4Name && new Paragraph({
+                      text: `4. ${proposal.students.student4Name}`,
+                      spacing: { after: 100 },
+                    }),
+                    proposal.students.student5Name && new Paragraph({
+                      text: `5. ${proposal.students.student5Name}`,
+                      spacing: { after: 100 },
+                    }),
+                    proposal.students.student6Name && new Paragraph({
+                      text: `6. ${proposal.students.student6Name}`,
+                      spacing: { after: 100 },
+                    }),
+                  ].filter(Boolean)
+                : [new Paragraph({ text: 'No team members information available' })]) as Paragraph[],
+
+              // Mentors Section
+              new Paragraph({
+                text: '6. Supervising Lecturers',
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 300, after: 200 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: 'Lecturer 1: ',
+                    bold: true,
+                  }),
+                  new TextRun({
+                    text: proposal.lecturerCode1 || 'No information',
+                  }),
+                ],
+                spacing: { after: 100 },
+              }),
+              ...(proposal.lecturerCode2 ? [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: 'Lecturer 2: ',
+                      bold: true,
+                    }),
+                    new TextRun({
+                      text: proposal.lecturerCode2,
+                    }),
+                  ],
+                  spacing: { after: 100 },
+                }),
+              ] : []),
+
+              // Review Schedule Section (if any)
+              ...(proposal.review1At || proposal.review2At || proposal.review3At ? [
+                new Paragraph({
+                  text: '7. Review Schedule',
+                  heading: HeadingLevel.HEADING_2,
+                  spacing: { before: 300, after: 200 },
+                }),
+                ...(proposal.review1At ? [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: 'Review 1: ',
+                        bold: true,
+                      }),
+                      new TextRun({
+                        text: new Date(proposal.review1At).toLocaleString('en-US'),
+                      }),
+                      ...(proposal.reviewer.reviewer1Code ? [
+                        new TextRun({
+                          text: ' - Reviewer: ',
+                          bold: true,
+                        }),
+                        new TextRun({
+                          text: proposal.reviewer.reviewer1Code,
+                        }),
+                      ] : []),
+                    ],
+                    spacing: { after: 100 },
+                  }),
+                ] : []),
+                ...(proposal.review2At ? [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: 'Review 2: ',
+                        bold: true,
+                      }),
+                      new TextRun({
+                        text: new Date(proposal.review2At).toLocaleString('en-US'),
+                      }),
+                      ...(proposal.reviewer.reviewer2Code ? [
+                        new TextRun({
+                          text: ' - Reviewer: ',
+                          bold: true,
+                        }),
+                        new TextRun({
+                          text: proposal.reviewer.reviewer2Code,
+                        }),
+                      ] : []),
+                    ],
+                    spacing: { after: 100 },
+                  }),
+                ] : []),
+                ...(proposal.review3At ? [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: 'Review 3: ',
+                        bold: true,
+                      }),
+                      new TextRun({
+                        text: new Date(proposal.review3At).toLocaleString('en-US'),
+                      }),
+                      ...(proposal.reviewer.reviewer3Code ? [
+                        new TextRun({
+                          text: ' - Reviewer: ',
+                          bold: true,
+                        }),
+                        new TextRun({
+                          text: proposal.reviewer.reviewer3Code,
+                        }),
+                      ] : []),
+                    ],
+                    spacing: { after: 100 },
+                  }),
+                ] : []),
+              ] : []),
+
+              // Created Date
+              new Paragraph({
+                text: '',
+                spacing: { before: 400, after: 200 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: 'Created Date: ',
+                    bold: true,
+                  }),
+                  new TextRun({
+                    text: new Date(proposal.createdAt).toLocaleString('en-US'),
+                  }),
+                ],
+              }),
+            ],
+          },
+        ],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const fileName = `${proposal.id}_${proposal.title.replace(/[^a-z0-9]/gi, '_')}.docx`;
+      zip.file(fileName, blob);
+    }
+
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const timestamp = new Date().toISOString().split('T')[0];
+    saveAs(zipBlob, `All_Proposals_${timestamp}.zip`);
+  } catch (error) {
+    alert('Lỗi khi tải xuống: ' + error);
+  }
 };

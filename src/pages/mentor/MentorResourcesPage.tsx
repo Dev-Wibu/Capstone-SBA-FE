@@ -9,6 +9,7 @@ import ProposalDetailModal from '@/components/ProposalDetailModal';
 import AlertModal from '@/components/AlertModal';
 import ProposalComparisonModal from '@/components/ProposalComparisonModal';
 import { parseDocxFile, validateParsedData } from '@/utils/docxParser';
+import { exportProposalTemplate } from '@/utils/exportDocx';
 import { toast } from 'sonner';
 
 const MentorResourcesPage = () => {
@@ -907,13 +908,14 @@ const MentorResourcesPage = () => {
                   </div>
                 </div>
                 
-                {/* Hướng dẫn format */}
-                <details className="mt-3">
-                  <summary className="text-sm text-blue-600 cursor-pointer hover:text-blue-700 font-medium">
-                    📝 Xem định dạng file Word mẫu
-                  </summary>
-                  <div className="mt-2 text-xs text-gray-600 bg-white p-3 rounded border border-blue-200">
-                    <pre className="whitespace-pre-wrap font-mono">
+                {/* Hướng dẫn format và download template */}
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <details className="flex-1">
+                    <summary className="text-sm text-blue-600 cursor-pointer hover:text-blue-700 font-medium">
+                      📝 Xem định dạng file Word mẫu
+                    </summary>
+                    <div className="mt-2 text-xs text-gray-600 bg-white p-3 rounded border border-blue-200">
+                      <pre className="whitespace-pre-wrap font-mono">
 {`Title: Tên đề tài của bạn
 
 Context: Bối cảnh và vấn đề cần giải quyết...
@@ -932,9 +934,20 @@ Non-Functional Requirements:
 Students:
 - SE123456: Nguyễn Văn A
 - SE789012: Trần Thị B`}
-                    </pre>
-                  </div>
-                </details>
+                      </pre>
+                    </div>
+                  </details>
+                  <button
+                    type="button"
+                    onClick={() => exportProposalTemplate()}
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium transition whitespace-nowrap flex items-center gap-2 h-fit"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Tải template
+                  </button>
+                </div>
               </div>
 
               {/* Chọn Mentor phụ (lecturerCode2 - optional) */}

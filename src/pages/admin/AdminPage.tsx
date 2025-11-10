@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
 import type { CapstoneProposalResponse } from '../../interfaces';
-import { getProposalsByAdmin, reviewProposal } from '../../services/api';
+import { getProposalsByAdmin, getAllProposals, reviewProposal } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
+import { exportAllProposalsToZip } from '../../utils/exportDocx';
 
 const AdminPage = () => {
   const { user } = useAuth();
   const [selectedProject, setSelectedProject] = useState<CapstoneProposalResponse | null>(null);
   const [projects, setProjects] = useState<CapstoneProposalResponse[]>([]);
+  const [allProjects, setAllProjects] = useState<CapstoneProposalResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filterMode, setFilterMode] = useState<'pending' | 'all'>('pending');
+  const [isDownloading, setIsDownloading] = useState(false);
   
   // Reject modal states
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -32,8 +36,13 @@ const AdminPage = () => {
         return;
       }
       
-      const data = await getProposalsByAdmin(user.id);
-      setProjects(data);
+      // Always fetch pending proposals
+      const pendingData = await getProposalsByAdmin(user.id);
+      setProjects(pendingData);
+      
+      // Fetch all proposals for the "all" filter
+      const allData = await getAllProposals();
+      setAllProjects(allData);
     } catch (err: any) {
       setError('Không thể tải danh sách đề tài: ' + (err.response?.data?.message || err.message));
     } finally {
@@ -113,6 +122,25 @@ const AdminPage = () => {
     }
   };
 
+  const handleDownloadAll = async () => {
+    try {
+      setIsDownloading(true);
+      const dataToDownload = filterMode === 'pending' ? projects : allProjects;
+      await exportAllProposalsToZip(dataToDownload);
+      toast.success('Tải xuống thành công!', {
+        description: `Đã tải ${dataToDownload.length} đề tài`,
+        duration: 3000,
+      });
+    } catch (err: any) {
+      toast.error('Lỗi khi tải xuống', {
+        description: err.message || 'Có lỗi xảy ra',
+        duration: 4000,
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   // Helper: Lấy danh sách students
   const getStudentsList = (project: CapstoneProposalResponse): string[] => {
     const students: string[] = [];
@@ -172,18 +200,68 @@ const AdminPage = () => {
         </div>
       </div>
 
+      {/* Filter and Download Controls */}
+      <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setFilterMode('pending')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              filterMode === 'pending'
+                ? 'bg-orange-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Chờ duyệt ({projects.length})
+          </button>
+          <button
+            onClick={() => setFilterMode('all')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              filterMode === 'all'
+                ? 'bg-orange-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Tất cả ({allProjects.length})
+          </button>
+        </div>
+        
+        <button
+          onClick={handleDownloadAll}
+          disabled={isDownloading || (filterMode === 'pending' ? projects.length === 0 : allProjects.length === 0)}
+          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          {isDownloading ? (
+            <>
+              <span className="animate-spin">⏳</span>
+              <span>Đang tải...</span>
+            </>
+          ) : (
+            <>
+              <span>⬇️</span>
+              <span>Tải xuống tất cả</span>
+            </>
+          )}
+        </button>
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-6 max-w-md">
         <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-xl shadow-lg text-white">
-          <p className="text-sm text-orange-100 mb-2">Tổng đề tài chờ duyệt</p>
-          <p className="text-4xl font-bold">{projects.length}</p>
-          <p className="text-xs text-orange-100 mt-2">Đã qua kiểm tra trùng lặp</p>
+          <p className="text-sm text-orange-100 mb-2">
+            {filterMode === 'pending' ? 'Tổng đề tài chờ duyệt' : 'Tổng tất cả đề tài'}
+          </p>
+          <p className="text-4xl font-bold">
+            {filterMode === 'pending' ? projects.length : allProjects.length}
+          </p>
+          <p className="text-xs text-orange-100 mt-2">
+            {filterMode === 'pending' ? 'Đã qua kiểm tra trùng lặp' : 'Trong hệ thống'}
+          </p>
         </div>
       </div>
 
       {/* Projects List */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {projects.map((project) => {
+        {(filterMode === 'pending' ? projects : allProjects).map((project) => {
           const students = getStudentsList(project);
           
           return (
@@ -248,20 +326,31 @@ const AdminPage = () => {
 
                 {/* Action Buttons */}
                 <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={() => handleApprove(project.id!)}
-                    disabled={isSubmitting}
-                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    ✓ Duyệt
-                  </button>
-                  <button
-                    onClick={() => openRejectModal(project.id!)}
-                    disabled={isSubmitting}
-                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    ✗ Từ chối
-                  </button>
+                  {filterMode === 'pending' ? (
+                    <>
+                      <button
+                        onClick={() => handleApprove(project.id!)}
+                        disabled={isSubmitting}
+                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        ✓ Duyệt
+                      </button>
+                      <button
+                        onClick={() => openRejectModal(project.id!)}
+                        disabled={isSubmitting}
+                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        ✗ Từ chối
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setSelectedProject(project)}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                    >
+                      Xem chi tiết
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -269,11 +358,15 @@ const AdminPage = () => {
         })}
       </div>
 
-      {projects.length === 0 && (
+      {(filterMode === 'pending' ? projects.length === 0 : allProjects.length === 0) && (
         <div className="text-center py-12">
           <div className="text-gray-400 text-6xl mb-4">📋</div>
-          <p className="text-gray-500 text-lg font-medium mb-2">Không có đề tài nào cần duyệt</p>
-          <p className="text-gray-400 text-sm">Tất cả đề tài đã được xử lý hoặc chưa có đề tài mới</p>
+          <p className="text-gray-500 text-lg font-medium mb-2">
+            {filterMode === 'pending' ? 'Không có đề tài nào cần duyệt' : 'Không có đề tài nào trong hệ thống'}
+          </p>
+          <p className="text-gray-400 text-sm">
+            {filterMode === 'pending' ? 'Tất cả đề tài đã được xử lý hoặc chưa có đề tài mới' : 'Vui lòng quay lại sau'}
+          </p>
         </div>
       )}
 
