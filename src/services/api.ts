@@ -205,23 +205,23 @@ export const getProposalHistory = async (id: number): Promise<any[]> => {
 };
 
 /**
- * Approve hoặc Reject proposal (Admin)
+ * Approve hoặc Reject proposal (Admin/Reviewer)
  * @param proposalId - ID của proposal
  * @param isApproved - true = approve, false = reject
- * @param adminId - ID của admin đang duyệt
+ * @param reviewerCode - Mã giảng viên (lecturerCode) của người đang duyệt
  * @param reason - Lý do từ chối (chỉ cần khi reject)
  */
 export const reviewProposal = async (
   proposalId: number,
   isApproved: boolean,
-  adminId: number,
+  reviewerCode: string,
   reason?: string | null
 ): Promise<void> => {
   await api.put('/api/capstone-proposal', null, {
     params: {
       proposalId,
       isApproved,
-      adminId,
+      reviewerCode,
       reason: reason || null,
     },
   });
@@ -241,6 +241,14 @@ export const getLecturers = async (): Promise<Lecturer[]> => {
  */
 export const getLecturerById = async (id: number): Promise<Lecturer> => {
   const response = await api.get<Lecturer>(`/api/lecturers/${id}`);
+  return response.data;
+};
+
+/**
+ * Lấy thông tin lecturer theo code
+ */
+export const getLecturerByCode = async (code: string): Promise<Lecturer> => {
+  const response = await api.get<Lecturer>(`/api/lecturers/by-code/${code}`);
   return response.data;
 };
 
@@ -272,6 +280,17 @@ export const updateProposalReview = async (
   if (mentorName2) params.mentorName2 = mentorName2;
   
   await api.put('/api/capstone-proposal/update-review', null, { params });
+};
+
+/**
+ * Cập nhật quyết định duyệt/từ chối của hội đồng
+ * Backend sẽ tự xử lý việc cập nhật isReviewerApprove dựa vào lecturerCode
+ * @param proposalId ID của proposal
+ */
+export const updateReviewBoardDecision = async (proposalId: number): Promise<void> => {
+  await api.put('/api/capstone-proposal/update-review', null, {
+    params: { proposalId }
+  });
 };
 
 /**

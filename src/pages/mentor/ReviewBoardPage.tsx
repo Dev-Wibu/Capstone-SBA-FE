@@ -1,18 +1,26 @@
 import { useState, useEffect } from 'react';
 import type { CapstoneProposalResponse, Semester } from '@/interfaces';
-import { getAllProposals, getSemesters } from '@/services/api';
+import { getAllProposals, getSemesters, reviewProposal } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import ProposalDetailModal from '@/components/ProposalDetailModal';
 
 const ReviewBoardPage = () => {
   const { user } = useAuth();
   const [proposals, setProposals] = useState<CapstoneProposalResponse[]>([]);
+  const [filteredProposals, setFilteredProposals] = useState<CapstoneProposalResponse[]>([]);
   const [currentSemester, setCurrentSemester] = useState<Semester | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedProposal, setSelectedProposal] = useState<CapstoneProposalResponse | null>(null);
   const [isReviewerMember, setIsReviewerMember] = useState(false);
   const [reviewerPosition, setReviewerPosition] = useState<1 | 2 | 3 | 4 | null>(null);
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved'>('all');
+  
+  // State cho reject modal
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectProposalId, setRejectProposalId] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -48,10 +56,33 @@ const ReviewBoardPage = () => {
 
         // Nếu là reviewer, filter proposals thuộc semester hiện tại
         if (position !== null) {
-          const filtered = proposalsData.filter(p => 
-            p.semester?.id === current.id && 
-            p.status === 'DUPLICATE_ACCEPTED' // Chỉ hiển thị proposals đã qua kiểm tra trùng
-          );
+          const filtered = proposalsData.filter(p => {
+            if (p.semester?.id !== current.id) return false;
+            
+            // Chỉ hiển thị proposals đang trong giai đoạn review (REVIEW_1, REVIEW_2, REVIEW_3)
+            const reviewStatuses = ['REVIEW_1', 'REVIEW_2', 'REVIEW_3'];
+            if (!reviewStatuses.includes(p.status)) return false;
+            
+            // Kiểm tra xem user có phải là reviewer1 hoặc reviewer2 của proposal này không
+            const isReviewer1 = p.reviewer?.reviewer1Code === lecturerCode;
+            const isReviewer2 = p.reviewer?.reviewer2Code === lecturerCode;
+            
+            console.log(`Proposal ${p.id}:`, {
+              title: p.title,
+              status: p.status,
+              reviewer1Code: p.reviewer?.reviewer1Code,
+              reviewer2Code: p.reviewer?.reviewer2Code,
+              userCode: lecturerCode,
+              isReviewer1,
+              isReviewer2,
+              shouldShow: isReviewer1 || isReviewer2
+            });
+            
+            return isReviewer1 || isReviewer2;
+          });
+          
+          console.log('Total proposals:', proposalsData.length);
+          console.log('Filtered proposals:', filtered.length);
           setProposals(filtered);
         }
       }
@@ -62,16 +93,27 @@ const ReviewBoardPage = () => {
     }
   };
 
+  // Filter proposals based on status
+  useEffect(() => {
+    if (filterStatus === 'all') {
+      setFilteredProposals(proposals);
+    } else if (filterStatus === 'pending') {
+      setFilteredProposals(proposals.filter(p => getReviewStatus(p) === null));
+    } else if (filterStatus === 'approved') {
+      setFilteredProposals(proposals.filter(p => getReviewStatus(p) !== null));
+    }
+  }, [proposals, filterStatus, reviewerPosition]);
+
   const handleApprove = async (proposalId: number) => {
-    if (!reviewerPosition) return;
+    if (!reviewerPosition || !user?.lecturerCode) return;
     
     try {
-      // TODO: Call API to approve proposal
-      // API endpoint: PUT /api/capstone-proposal/review/approve
-      // Body: { proposalId, reviewerPosition }
-      console.log('Approving proposal:', proposalId, 'as reviewer', reviewerPosition);
-      toast.success('Duyệt đề tài thành công!');
-      fetchData(); // Refresh data
+      await reviewProposal(proposalId, true, user.lecturerCode, 'accepted');
+      toast.success('Đã gửi quyết định duyệt đề tài!');
+      // Đợi 500ms rồi mới refresh để backend kịp cập nhật
+      setTimeout(() => {
+        fetchData();
+      }, 500);
     } catch (err: any) {
       toast.error('Lỗi khi duyệt đề tài', {
         description: err.response?.data?.message || err.message,
@@ -79,16 +121,30 @@ const ReviewBoardPage = () => {
     }
   };
 
-  const handleReject = async (proposalId: number, reason: string) => {
-    if (!reviewerPosition) return;
+  const handleReject = (proposalId: number) => {
+    setRejectProposalId(proposalId);
+    setRejectReason('');
+    setShowRejectModal(true);
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectProposalId || !reviewerPosition || !user?.lecturerCode) return;
+    
+    if (!rejectReason.trim()) {
+      toast.warning('Vui lòng nhập lý do từ chối');
+      return;
+    }
     
     try {
-      // TODO: Call API to reject proposal
-      // API endpoint: PUT /api/capstone-proposal/review/reject
-      // Body: { proposalId, reviewerPosition, reason }
-      console.log('Rejecting proposal:', proposalId, 'as reviewer', reviewerPosition, 'reason:', reason);
-      toast.success('Từ chối đề tài thành công!');
-      fetchData(); // Refresh data
+      await reviewProposal(rejectProposalId, false, user.lecturerCode, rejectReason);
+      toast.success('Đã gửi quyết định từ chối đề tài!');
+      setShowRejectModal(false);
+      setRejectProposalId(null);
+      setRejectReason('');
+      // Đợi 500ms rồi mới refresh để backend kịp cập nhật
+      setTimeout(() => {
+        fetchData();
+      }, 500);
     } catch (err: any) {
       toast.error('Lỗi khi từ chối đề tài', {
         description: err.response?.data?.message || err.message,
@@ -117,20 +173,21 @@ const ReviewBoardPage = () => {
 
   // Helper: Check if already approved/rejected by current reviewer
   const getReviewStatus = (proposal: CapstoneProposalResponse) => {
-    if (!reviewerPosition) return null;
+    if (!user?.lecturerCode) return null;
     
-    switch (reviewerPosition) {
-      case 1:
-        return proposal.isReviewerApprove1;
-      case 2:
-        return proposal.isReviewerApprove2;
-      case 3:
-        return proposal.isReviewerApprove3;
-      case 4:
-        return proposal.isReviewerApprove4;
-      default:
-        return null;
+    // Kiểm tra xem user là reviewer1 hay reviewer2
+    const isReviewer1 = proposal.reviewer?.reviewer1Code === user.lecturerCode;
+    const isReviewer2 = proposal.reviewer?.reviewer2Code === user.lecturerCode;
+    
+    let status = null;
+    if (isReviewer1) {
+      status = proposal.isReviewerApprove1;
+    } else if (isReviewer2) {
+      status = proposal.isReviewerApprove2;
     }
+    
+    console.log(`Proposal ${proposal.id} - User ${user.lecturerCode} - isReviewer1: ${isReviewer1}, isReviewer2: ${isReviewer2}, status:`, status);
+    return status;
   };
 
   if (loading) {
@@ -207,16 +264,56 @@ const ReviewBoardPage = () => {
         </div>
       </div>
 
+      {/* Filter Buttons */}
+      <div className="flex gap-3 mb-6">
+        <button
+          onClick={() => setFilterStatus('all')}
+          className={`px-4 py-2 rounded-lg font-medium transition ${
+            filterStatus === 'all'
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          Tất cả ({proposals.length})
+        </button>
+        <button
+          onClick={() => setFilterStatus('pending')}
+          className={`px-4 py-2 rounded-lg font-medium transition ${
+            filterStatus === 'pending'
+              ? 'bg-yellow-600 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          Chờ duyệt ({proposals.filter(p => getReviewStatus(p) === null).length})
+        </button>
+        <button
+          onClick={() => setFilterStatus('approved')}
+          className={`px-4 py-2 rounded-lg font-medium transition ${
+            filterStatus === 'approved'
+              ? 'bg-green-600 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          Đã duyệt ({proposals.filter(p => getReviewStatus(p) !== null).length})
+        </button>
+      </div>
+
       {/* Proposals List */}
-      {proposals.length === 0 ? (
+      {filteredProposals.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <div className="text-gray-400 text-6xl mb-4">📋</div>
-          <p className="text-gray-500 text-lg font-medium mb-2">Chưa có đề tài nào</p>
-          <p className="text-gray-400 text-sm">Các đề tài sẽ xuất hiện sau khi qua kiểm tra trùng lặp</p>
+          <p className="text-gray-500 text-lg font-medium mb-2">
+            {filterStatus === 'all' ? 'Chưa có đề tài nào' : 
+             filterStatus === 'pending' ? 'Không có đề tài chờ duyệt' :
+             'Chưa có đề tài đã duyệt'}
+          </p>
+          <p className="text-gray-400 text-sm">
+            {filterStatus === 'all' && 'Các đề tài sẽ xuất hiện sau khi qua kiểm tra trùng lặp'}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {proposals.map((proposal) => {
+          {filteredProposals.map((proposal) => {
             const students = getStudentsList(proposal);
             const reviewStatus = getReviewStatus(proposal);
 
@@ -295,20 +392,15 @@ const ReviewBoardPage = () => {
                     <div className="flex gap-2 pt-4 border-t border-gray-200">
                       <button
                         onClick={() => handleApprove(proposal.id!)}
-                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center justify-center gap-2"
+                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
                       >
-                        <span>✓</span>
-                        <span>Duyệt</span>
+                        Duyệt
                       </button>
                       <button
-                        onClick={() => {
-                          const reason = prompt('Lý do từ chối:');
-                          if (reason) handleReject(proposal.id!, reason);
-                        }}
-                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium flex items-center justify-center gap-2"
+                        onClick={() => handleReject(proposal.id!)}
+                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
                       >
-                        <span>✕</span>
-                        <span>Từ chối</span>
+                        Từ chối
                       </button>
                     </div>
                   )}
@@ -319,96 +411,47 @@ const ReviewBoardPage = () => {
         </div>
       )}
 
-      {/* Detail Modal */}
-      {selectedProposal && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 p-6">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                    {selectedProposal.title}
-                  </h2>
-                </div>
-                <button
-                  onClick={() => setSelectedProposal(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
+      {/* ProposalDetailModal */}
+      <ProposalDetailModal
+        proposal={selectedProposal}
+        isOpen={!!selectedProposal}
+        onClose={() => setSelectedProposal(null)}
+        onRefresh={fetchData}
+      />
 
-            <div className="p-6 space-y-6">
-              {/* Context */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>📌</span>
-                  <span>Bối cảnh</span>
-                </h3>
-                <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedProposal.context}</p>
-              </div>
-
-              {/* Description */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>📝</span>
-                  <span>Mô tả chi tiết</span>
-                </h3>
-                <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedProposal.description}</p>
-              </div>
-
-              {/* Functional Requirements */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>⚙️</span>
-                  <span>Yêu cầu chức năng ({selectedProposal.func.length})</span>
-                </h3>
-                <ul className="space-y-2">
-                  {selectedProposal.func.map((item, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-gray-700 bg-blue-50 p-2 rounded">
-                      <span className="text-blue-600 font-bold mt-0.5">{idx + 1}.</span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Non-Functional Requirements */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>🎯</span>
-                  <span>Yêu cầu phi chức năng ({selectedProposal.nonFunc.length})</span>
-                </h3>
-                <ul className="space-y-2">
-                  {selectedProposal.nonFunc.map((item, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-gray-700 bg-purple-50 p-2 rounded">
-                      <span className="text-purple-600 font-bold mt-0.5">{idx + 1}.</span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Students */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>👥</span>
-                  <span>Thành viên nhóm</span>
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {getStudentsList(selectedProposal).map((student, idx) => (
-                    <div key={idx} className="flex items-center gap-2 bg-orange-50 px-3 py-2 rounded-lg">
-                      <span className="w-6 h-6 bg-orange-200 rounded-full flex items-center justify-center text-xs font-bold text-orange-800">
-                        {idx + 1}
-                      </span>
-                      <span className="text-sm font-medium text-gray-700">{student}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+      {/* Reject Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Từ chối đề tài</h3>
+            <p className="text-gray-600 mb-4">Vui lòng nhập lý do từ chối đề tài này:</p>
+            
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Nhập lý do từ chối..."
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+              rows={4}
+              autoFocus
+            />
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setRejectProposalId(null);
+                  setRejectReason('');
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleConfirmReject}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
+              >
+                Xác nhận từ chối
+              </button>
             </div>
           </div>
         </div>

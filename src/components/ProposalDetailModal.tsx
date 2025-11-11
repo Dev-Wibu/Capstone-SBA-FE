@@ -1,6 +1,6 @@
 import type { CapstoneProposalResponse, Lecturer } from '@/interfaces';
 import { useEffect, useState } from 'react';
-import { getLecturerById, getLecturers } from '@/services/api';
+import { getLecturerByCode, getLecturers } from '@/services/api';
 import ScheduleReviewModal from '@/components/ScheduleReviewModal';
 import { exportProposalToDocx } from '@/utils/exportDocx';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,12 +15,13 @@ interface ProposalDetailModalProps {
 
 const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefresh }: ProposalDetailModalProps) => {
   const { user } = useAuth();
-  const [admin1Info, setAdmin1Info] = useState<Lecturer | null>(null);
-  const [admin2Info, setAdmin2Info] = useState<Lecturer | null>(null);
-  const [loadingAdmins, setLoadingAdmins] = useState(false);
+  const [reviewer1Info, setReviewer1Info] = useState<Lecturer | null>(null);
+  const [reviewer2Info, setReviewer2Info] = useState<Lecturer | null>(null);
+  const [loadingReviewers, setLoadingReviewers] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleReviewTime, setScheduleReviewTime] = useState<1 | 2 | 3>(1);
   const [isExporting, setIsExporting] = useState(false);
+  const [allLecturers, setAllLecturers] = useState<Lecturer[]>([]);
   
   // Thêm state cho mentor
   const [mentor1Info, setMentor1Info] = useState<Lecturer | null>(null);
@@ -31,7 +32,7 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
     if (!proposal) return;
     try {
       setIsExporting(true);
-      await exportProposalToDocx(proposal);
+      await exportProposalToDocx(proposal, allLecturers);
     } catch (error) {
       alert('Có lỗi khi xuất file Word. Vui lòng thử lại.');
     } finally {
@@ -40,35 +41,40 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
   };
 
   useEffect(() => {
-    const fetchAdmins = async () => {
+    const fetchReviewers = async () => {
       if (!proposal || !isOpen) return;
-      setLoadingAdmins(true);
+      setLoadingReviewers(true);
       try {
         const promises: Promise<void>[] = [];
-        if (proposal.admin1Id !== null) {
+        
+        // Fetch reviewer 1 by code
+        if (proposal.reviewer?.reviewer1Code) {
           promises.push(
-            getLecturerById(proposal.admin1Id)
-              .then(data => setAdmin1Info(data))
-              .catch(() => setAdmin1Info(null))
+            getLecturerByCode(proposal.reviewer.reviewer1Code)
+              .then(data => setReviewer1Info(data))
+              .catch(() => setReviewer1Info(null))
           );
         } else {
-          setAdmin1Info(null);
+          setReviewer1Info(null);
         }
-        if (proposal.admin2Id !== null) {
+        
+        // Fetch reviewer 2 by code
+        if (proposal.reviewer?.reviewer2Code) {
           promises.push(
-            getLecturerById(proposal.admin2Id)
-              .then(data => setAdmin2Info(data))
-              .catch(() => setAdmin2Info(null))
+            getLecturerByCode(proposal.reviewer.reviewer2Code)
+              .then(data => setReviewer2Info(data))
+              .catch(() => setReviewer2Info(null))
           );
         } else {
-          setAdmin2Info(null);
+          setReviewer2Info(null);
         }
+        
         await Promise.all(promises);
       } finally {
-        setLoadingAdmins(false);
+        setLoadingReviewers(false);
       }
     };
-    fetchAdmins();
+    fetchReviewers();
   }, [proposal, isOpen]);
 
   // Fetch thông tin mentor dựa trên lecturerCode
@@ -78,11 +84,12 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
       setLoadingMentors(true);
       try {
         // Lấy tất cả lecturers
-        const allLecturers = await getLecturers();
+        const lecturersList = await getLecturers();
+        setAllLecturers(lecturersList);
         
         // Tìm mentor 1 theo lecturerCode1
         if (proposal.lecturerCode1) {
-          const mentor1 = allLecturers.find(l => l.lecturerCode === proposal.lecturerCode1);
+          const mentor1 = lecturersList.find(l => l.lecturerCode === proposal.lecturerCode1);
           setMentor1Info(mentor1 || null);
         } else {
           setMentor1Info(null);
@@ -90,7 +97,7 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
         
         // Tìm mentor 2 theo lecturerCode2
         if (proposal.lecturerCode2) {
-          const mentor2 = allLecturers.find(l => l.lecturerCode === proposal.lecturerCode2);
+          const mentor2 = lecturersList.find(l => l.lecturerCode === proposal.lecturerCode2);
           setMentor2Info(mentor2 || null);
         } else {
           setMentor2Info(null);
@@ -434,74 +441,60 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
             </div>
           )}
 
-          {/* Trạng thái duyệt của Admin (chỉ hiện khi có admin liên quan) */}
-          {(proposal.admin1Id !== null || proposal.admin2Id !== null) && (
+          {/* Thông tin người duyệt (chỉ hiện khi có reviewer) */}
+          {(proposal.reviewer?.reviewer1Code || proposal.reviewer?.reviewer2Code) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
-              {proposal.admin1Id !== null && (
+              {proposal.reviewer?.reviewer1Code && (
                 <div className="bg-gray-50 p-3 rounded-lg">
                   <p className="text-xs text-gray-500 mb-1 flex items-center gap-2">
-                    <span className="font-semibold">Admin 1</span>
-                    {loadingAdmins && <span className="text-gray-400">(Đang tải...)</span>}
-                    {!loadingAdmins && admin1Info && (
-                      <span className="text-gray-700">{admin1Info.fullName} ({admin1Info.lecturerCode})</span>
+                    <span className="font-semibold">Người duyệt 1</span>
+                    {loadingReviewers && <span className="text-gray-400">(Đang tải...)</span>}
+                    {!loadingReviewers && reviewer1Info && (
+                      <span className="text-gray-700">{reviewer1Info.fullName} ({reviewer1Info.lecturerCode})</span>
                     )}
-                    {!loadingAdmins && !admin1Info && (
-                      <span className="text-red-500">Không tìm thấy</span>
+                    {!loadingReviewers && !reviewer1Info && proposal.reviewer?.reviewer1Name && (
+                      <span className="text-gray-700">{proposal.reviewer.reviewer1Name} ({proposal.reviewer.reviewer1Code})</span>
                     )}
                   </p>
                   <p className="text-sm font-medium flex items-center gap-2">
-                    {proposal.isAdmin1 ? (
+                    {proposal.review1At ? (
                       <span className="text-green-600 flex items-center gap-1">
                         <span>✅ Đã duyệt</span>
-                        {proposal.review1At && (
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                            {formatDate(proposal.review1At)}
-                          </span>
-                        )}
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                          {formatDate(proposal.review1At)}
+                        </span>
                       </span>
                     ) : (
                       <span className="text-yellow-600 flex items-center gap-1">
                         ⏳ Chờ duyệt
-                        {proposal.review1At && (
-                          <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">
-                            {formatDate(proposal.review1At)}
-                          </span>
-                        )}
                       </span>
                     )}
                   </p>
                 </div>
               )}
-              {proposal.admin2Id !== null && (
+              {proposal.reviewer?.reviewer2Code && (
                 <div className="bg-gray-50 p-3 rounded-lg">
                   <p className="text-xs text-gray-500 mb-1 flex items-center gap-2">
-                    <span className="font-semibold">Admin 2</span>
-                    {loadingAdmins && <span className="text-gray-400">(Đang tải...)</span>}
-                    {!loadingAdmins && admin2Info && (
-                      <span className="text-gray-700">{admin2Info.fullName} ({admin2Info.lecturerCode})</span>
+                    <span className="font-semibold">Người duyệt 2</span>
+                    {loadingReviewers && <span className="text-gray-400">(Đang tải...)</span>}
+                    {!loadingReviewers && reviewer2Info && (
+                      <span className="text-gray-700">{reviewer2Info.fullName} ({reviewer2Info.lecturerCode})</span>
                     )}
-                    {!loadingAdmins && !admin2Info && (
-                      <span className="text-red-500">Không tìm thấy</span>
+                    {!loadingReviewers && !reviewer2Info && proposal.reviewer?.reviewer2Name && (
+                      <span className="text-gray-700">{proposal.reviewer.reviewer2Name} ({proposal.reviewer.reviewer2Code})</span>
                     )}
                   </p>
                   <p className="text-sm font-medium flex items-center gap-2">
-                    {proposal.isAdmin2 ? (
+                    {proposal.review2At ? (
                       <span className="text-green-600 flex items-center gap-1">
                         <span>✅ Đã duyệt</span>
-                        {proposal.review2At && (
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                            {formatDate(proposal.review2At)}
-                          </span>
-                        )}
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                          {formatDate(proposal.review2At)}
+                        </span>
                       </span>
                     ) : (
                       <span className="text-yellow-600 flex items-center gap-1">
                         ⏳ Chờ duyệt
-                        {proposal.review2At && (
-                          <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded">
-                            {formatDate(proposal.review2At)}
-                          </span>
-                        )}
                       </span>
                     )}
                   </p>
@@ -597,7 +590,7 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
         proposalId={proposal.id as number}
         reviewTime={scheduleReviewTime}
         excludeCodes={[proposal.lecturerCode1 || '', proposal.lecturerCode2 || ''].filter(Boolean) as string[]}
-        reviewer={proposal.reviewer}
+        reviewer={proposal.reviewer || undefined}
         onSuccess={() => {
           // Sau khi xếp lịch thành công, refresh data và đóng modal
           setShowScheduleModal(false);

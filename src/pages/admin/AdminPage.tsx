@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import type { CapstoneProposalResponse } from '../../interfaces';
-import { getAllProposals } from '../../services/api';
+import type { CapstoneProposalResponse, Lecturer } from '../../interfaces';
+import { getAllProposals, getLecturers } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
 import { exportAllProposalsToZip } from '../../utils/exportDocx';
@@ -8,14 +8,19 @@ import RatioSettingModal from '../../components/RatioSettingModal';
 import AddSemesterModal from '../../components/AddSemesterModal';
 import ReviewBoardModal from '../../components/ReviewBoardModal';
 import ViewReviewBoardModal from '../../components/ViewReviewBoardModal';
+import ProposalDetailModal from '../../components/ProposalDetailModal';
 
 const AdminPage = () => {
   const { user } = useAuth();
   const [selectedProject, setSelectedProject] = useState<CapstoneProposalResponse | null>(null);
   const [projects, setProjects] = useState<CapstoneProposalResponse[]>([]);
+  const [lecturers, setLecturers] = useState<Lecturer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  
+  // Filter status
+  const [filterStatus, setFilterStatus] = useState<string>('all');
   
   // Ratio setting modal
   const [showRatioModal, setShowRatioModal] = useState(false);
@@ -53,9 +58,13 @@ const AdminPage = () => {
         return;
       }
       
-      // Fetch all proposals
-      const allData = await getAllProposals();
+      // Fetch all proposals and lecturers
+      const [allData, lecturersData] = await Promise.all([
+        getAllProposals(),
+        getLecturers()
+      ]);
       setProjects(allData);
+      setLecturers(lecturersData);
     } catch (err: any) {
       setError('Không thể tải danh sách đề tài: ' + (err.response?.data?.message || err.message));
     } finally {
@@ -66,9 +75,9 @@ const AdminPage = () => {
   const handleDownloadAll = async () => {
     try {
       setIsDownloading(true);
-      await exportAllProposalsToZip(projects);
+      await exportAllProposalsToZip(filteredProjects, lecturers);
       toast.success('Tải xuống thành công!', {
-        description: `Đã tải ${projects.length} đề tài`,
+        description: `Đã tải ${filteredProjects.length} đề tài`,
         duration: 3000,
       });
     } catch (err: any) {
@@ -94,6 +103,53 @@ const AdminPage = () => {
     }
     return students;
   };
+
+  // Helper: Lấy tên status tiếng Việt
+  const getStatusLabel = (status: CapstoneProposalResponse['status']): string => {
+    const statusMap: Record<string, string> = {
+      'SUBMITTED': 'Mới nộp',
+      'DUPLICATE_REJECTED': 'Bị trùng lặp',
+      'REJECT_BY_ADMIN': 'Từ chối bởi Admin',
+      'DUPLICATE_ACCEPTED': 'Đã qua kiểm tra trùng',
+      'REVIEW_1': 'Review lần 1',
+      'REVIEW_2': 'Review lần 2',
+      'REVIEW_3': 'Review lần 3',
+      'DEFENSE': 'Bảo vệ lần 1',
+      'SECOND_DEFENSE': 'Bảo vệ lần 2',
+      'FAILED': 'Không đạt',
+      'COMPLETED': 'Hoàn thành',
+    };
+    return statusMap[status] || status;
+  };
+
+  // Helper: Lấy màu badge cho status
+  const getStatusColor = (status: CapstoneProposalResponse['status']): string => {
+    const colorMap: Record<string, string> = {
+      'SUBMITTED': 'bg-blue-100 text-blue-800',
+      'DUPLICATE_REJECTED': 'bg-red-100 text-red-800',
+      'REJECT_BY_ADMIN': 'bg-red-100 text-red-800',
+      'DUPLICATE_ACCEPTED': 'bg-green-100 text-green-800',
+      'REVIEW_1': 'bg-yellow-100 text-yellow-800',
+      'REVIEW_2': 'bg-yellow-100 text-yellow-800',
+      'REVIEW_3': 'bg-yellow-100 text-yellow-800',
+      'DEFENSE': 'bg-purple-100 text-purple-800',
+      'SECOND_DEFENSE': 'bg-purple-100 text-purple-800',
+      'FAILED': 'bg-gray-100 text-gray-800',
+      'COMPLETED': 'bg-emerald-100 text-emerald-800',
+    };
+    return colorMap[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  // Filter projects theo status
+  const filteredProjects = filterStatus === 'all' 
+    ? projects 
+    : projects.filter(p => p.status === filterStatus);
+
+  // Đếm số lượng theo từng status
+  const statusCounts = projects.reduce((acc, project) => {
+    acc[project.status] = (acc[project.status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
   // Helper: Format date
   const formatDate = (dateString: string) => {
@@ -126,7 +182,7 @@ const AdminPage = () => {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-3xl font-bold text-gray-900">
-            Quản trị hệ thống - Duyệt đề tài
+            Quản lý tất cả đề tài
           </h1>
           <div className="flex gap-2">
             <button
@@ -152,24 +208,132 @@ const AdminPage = () => {
             </button>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <span className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-800 rounded-full font-medium">
-            <span>✅</span>
-            <span>Đã qua kiểm tra trùng lặp</span>
-          </span>
-          <span>→</span>
-          <span className="flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-800 rounded-full font-medium">
-            <span>👨‍💼</span>
-            <span>Chờ Admin duyệt cuối</span>
-          </span>
+        <p className="text-gray-600">
+          Xem và quản lý tất cả đề tài trong hệ thống
+        </p>
+      </div>
+
+      {/* Filter Status Buttons */}
+      <div className="mb-6">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setFilterStatus('all')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              filterStatus === 'all'
+                ? 'bg-orange-500 text-white shadow-md'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Tất cả ({projects.length})
+          </button>
+          <button
+            onClick={() => setFilterStatus('DUPLICATE_ACCEPTED')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              filterStatus === 'DUPLICATE_ACCEPTED'
+                ? 'bg-green-500 text-white shadow-md'
+                : 'bg-green-50 text-green-700 hover:bg-green-100'
+            }`}
+          >
+            Qua kiểm tra ({statusCounts['DUPLICATE_ACCEPTED'] || 0})
+          </button>
+          <button
+            onClick={() => setFilterStatus('REVIEW_1')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              filterStatus === 'REVIEW_1'
+                ? 'bg-yellow-500 text-white shadow-md'
+                : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
+            }`}
+          >
+            Review 1 ({statusCounts['REVIEW_1'] || 0})
+          </button>
+          <button
+            onClick={() => setFilterStatus('REVIEW_2')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              filterStatus === 'REVIEW_2'
+                ? 'bg-yellow-500 text-white shadow-md'
+                : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
+            }`}
+          >
+            Review 2 ({statusCounts['REVIEW_2'] || 0})
+          </button>
+          <button
+            onClick={() => setFilterStatus('REVIEW_3')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              filterStatus === 'REVIEW_3'
+                ? 'bg-yellow-500 text-white shadow-md'
+                : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
+            }`}
+          >
+            Review 3 ({statusCounts['REVIEW_3'] || 0})
+          </button>
+          <button
+            onClick={() => setFilterStatus('DEFENSE')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              filterStatus === 'DEFENSE'
+                ? 'bg-purple-500 text-white shadow-md'
+                : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+            }`}
+          >
+            Bảo vệ 1 ({statusCounts['DEFENSE'] || 0})
+          </button>
+          <button
+            onClick={() => setFilterStatus('SECOND_DEFENSE')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              filterStatus === 'SECOND_DEFENSE'
+                ? 'bg-purple-500 text-white shadow-md'
+                : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+            }`}
+          >
+            Bảo vệ 2 ({statusCounts['SECOND_DEFENSE'] || 0})
+          </button>
+          <button
+            onClick={() => setFilterStatus('COMPLETED')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              filterStatus === 'COMPLETED'
+                ? 'bg-emerald-500 text-white shadow-md'
+                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+            }`}
+          >
+            Hoàn thành ({statusCounts['COMPLETED'] || 0})
+          </button>
+          <button
+            onClick={() => setFilterStatus('DUPLICATE_REJECTED')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              filterStatus === 'DUPLICATE_REJECTED'
+                ? 'bg-red-500 text-white shadow-md'
+                : 'bg-red-50 text-red-700 hover:bg-red-100'
+            }`}
+          >
+            Trùng lặp ({statusCounts['DUPLICATE_REJECTED'] || 0})
+          </button>
+          <button
+            onClick={() => setFilterStatus('REJECT_BY_ADMIN')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              filterStatus === 'REJECT_BY_ADMIN'
+                ? 'bg-red-500 text-white shadow-md'
+                : 'bg-red-50 text-red-700 hover:bg-red-100'
+            }`}
+          >
+            Từ chối ({statusCounts['REJECT_BY_ADMIN'] || 0})
+          </button>
+          <button
+            onClick={() => setFilterStatus('FAILED')}
+            className={`px-4 py-2 rounded-lg font-medium transition ${
+              filterStatus === 'FAILED'
+                ? 'bg-gray-500 text-white shadow-md'
+                : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            Không đạt ({statusCounts['FAILED'] || 0})
+          </button>
         </div>
       </div>
 
-      {/* Filter and Download Controls */}
-      <div className="mb-6 flex items-center justify-end">
+      {/* Download Button */}
+      <div className="mb-6 flex justify-end">
         <button
           onClick={handleDownloadAll}
-          disabled={isDownloading || projects.length === 0}
+          disabled={isDownloading || filteredProjects.length === 0}
           className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
           {isDownloading ? (
@@ -180,24 +344,14 @@ const AdminPage = () => {
           ) : (
             <>
               <span>⬇️</span>
-              <span>Tải xuống tất cả</span>
+              <span>Tải xuống</span>
             </>
           )}
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-6 max-w-md">
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-xl shadow-lg text-white">
-          <p className="text-sm text-orange-100 mb-2">Tổng tất cả đề tài</p>
-          <p className="text-4xl font-bold">{projects.length}</p>
-          <p className="text-xs text-orange-100 mt-2">Trong hệ thống</p>
-        </div>
-      </div>
-
       {/* Projects List */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {projects.map((project) => {
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">{filteredProjects.map((project) => {
           const students = getStudentsList(project);
           
           return (
@@ -246,11 +400,10 @@ const AdminPage = () => {
                   </div>
                 </div>
 
-                {/* Actions */}
+                {/* Status Badge */}
                 <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    <span>✅</span>
-                    <span>Chờ duyệt</span>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
+                    <span>{getStatusLabel(project.status)}</span>
                   </span>
                   <button
                     onClick={() => setSelectedProject(project)}
@@ -275,129 +428,21 @@ const AdminPage = () => {
         })}
       </div>
 
-      {projects.length === 0 && (
+      {filteredProjects.length === 0 && (
         <div className="text-center py-12">
           <div className="text-gray-400 text-6xl mb-4">📋</div>
-          <p className="text-gray-500 text-lg font-medium mb-2">Không có đề tài nào trong hệ thống</p>
-          <p className="text-gray-400 text-sm">Vui lòng quay lại sau</p>
+          <p className="text-gray-500 text-lg font-medium mb-2">Không có đề tài nào</p>
+          <p className="text-gray-400 text-sm">Thử chọn filter khác</p>
         </div>
       )}
 
       {/* Detail Modal */}
-      {selectedProject && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 p-6">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-3">
-                    {selectedProject.title}
-                  </h2>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      <span>✅</span>
-                      <span>Chờ Admin duyệt</span>
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedProject(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Context */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>📌</span>
-                  <span>Bối cảnh</span>
-                </h3>
-                <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedProject.context}</p>
-              </div>
-
-              {/* Description */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>📝</span>
-                  <span>Mô tả chi tiết</span>
-                </h3>
-                <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{selectedProject.description}</p>
-              </div>
-
-              {/* Functional Requirements */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>⚙️</span>
-                  <span>Yêu cầu chức năng ({selectedProject.func.length})</span>
-                </h3>
-                <ul className="space-y-2">
-                  {selectedProject.func.map((item, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-gray-700 bg-blue-50 p-2 rounded">
-                      <span className="text-blue-600 font-bold mt-0.5">{idx + 1}.</span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Non-Functional Requirements */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>🎯</span>
-                  <span>Yêu cầu phi chức năng ({selectedProject.nonFunc.length})</span>
-                </h3>
-                <ul className="space-y-2">
-                  {selectedProject.nonFunc.map((item, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-gray-700 bg-purple-50 p-2 rounded">
-                      <span className="text-purple-600 font-bold mt-0.5">{idx + 1}.</span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Students */}
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <span>👥</span>
-                  <span>Thành viên nhóm</span>
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {getStudentsList(selectedProject).map((student, idx) => (
-                    <div key={idx} className="flex items-center gap-2 bg-orange-50 px-3 py-2 rounded-lg">
-                      <span className="w-6 h-6 bg-orange-200 rounded-full flex items-center justify-center text-xs font-bold text-orange-800">
-                        {idx + 1}
-                      </span>
-                      <span className="text-sm font-medium text-gray-700">{student}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Semester Info */}
-              {selectedProject.semester && (
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                    <span>📅</span>
-                    <span>Thông tin học kỳ</span>
-                  </h3>
-                  <div className="bg-gray-50 p-3 rounded-lg text-sm">
-                    <p><span className="font-medium">Tên:</span> {selectedProject.semester.name}</p>
-                    <p><span className="font-medium">Mã:</span> {selectedProject.semester.semesterCode}</p>
-                    <p><span className="font-medium">Năm học:</span> {selectedProject.semester.year}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <ProposalDetailModal
+        isOpen={selectedProject !== null}
+        proposal={selectedProject}
+        onClose={() => setSelectedProject(null)}
+        onRefresh={fetchProposals}
+      />
 
       {/* Ratio Setting Modal */}
       <RatioSettingModal

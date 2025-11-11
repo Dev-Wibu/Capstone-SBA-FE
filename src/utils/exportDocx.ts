@@ -1,9 +1,16 @@
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, convertInchesToTwip } from 'docx';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
-import type { CapstoneProposalResponse } from '@/interfaces';
+import type { CapstoneProposalResponse, Lecturer } from '@/interfaces';
 
-export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) => {
+export const exportProposalToDocx = async (proposal: CapstoneProposalResponse, lecturers?: Lecturer[]) => {
+  // Helper function to get lecturer name
+  const getLecturerName = (code: string): string => {
+    if (!lecturers) return code;
+    const lecturer = lecturers.find(l => l.lecturerCode === code);
+    return lecturer ? `${lecturer.fullName} (${code})` : code;
+  };
+
   const doc = new Document({
     sections: [
       {
@@ -162,11 +169,11 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
           new Paragraph({
             children: [
               new TextRun({
-                text: 'Lecturer 1: ',
+                text: 'Main Lecturer (Giảng viên chính): ',
                 bold: true,
               }),
               new TextRun({
-                text: proposal.lecturerCode1 || 'No information',
+                text: proposal.lecturerCode1 ? getLecturerName(proposal.lecturerCode1) : 'No information',
               }),
             ],
             spacing: { after: 100 },
@@ -175,11 +182,11 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
             new Paragraph({
               children: [
                 new TextRun({
-                  text: 'Lecturer 2: ',
+                  text: 'Co-Lecturer (Giảng viên phụ): ',
                   bold: true,
                 }),
                 new TextRun({
-                  text: proposal.lecturerCode2,
+                  text: getLecturerName(proposal.lecturerCode2),
                 }),
               ],
               spacing: { after: 100 },
@@ -203,13 +210,13 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
                   new TextRun({
                     text: new Date(proposal.review1At).toLocaleString('en-US'),
                   }),
-                  ...(proposal.reviewer.reviewer1Code ? [
+                  ...(proposal.reviewer && proposal.reviewer.reviewer1Code ? [
                     new TextRun({
                       text: ' - Reviewer: ',
                       bold: true,
                     }),
                     new TextRun({
-                      text: proposal.reviewer.reviewer1Code,
+                      text: getLecturerName(proposal.reviewer.reviewer1Code),
                     }),
                   ] : []),
                 ],
@@ -226,13 +233,13 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
                   new TextRun({
                     text: new Date(proposal.review2At).toLocaleString('en-US'),
                   }),
-                  ...(proposal.reviewer.reviewer2Code ? [
+                  ...(proposal.reviewer && proposal.reviewer.reviewer2Code ? [
                     new TextRun({
                       text: ' - Reviewer: ',
                       bold: true,
                     }),
                     new TextRun({
-                      text: proposal.reviewer.reviewer2Code,
+                      text: getLecturerName(proposal.reviewer.reviewer2Code),
                     }),
                   ] : []),
                 ],
@@ -249,13 +256,13 @@ export const exportProposalToDocx = async (proposal: CapstoneProposalResponse) =
                   new TextRun({
                     text: new Date(proposal.review3At).toLocaleString('en-US'),
                   }),
-                  ...(proposal.reviewer.reviewer3Code ? [
+                  ...(proposal.reviewer && proposal.reviewer.reviewer3Code ? [
                     new TextRun({
                       text: ' - Reviewer: ',
                       bold: true,
                     }),
                     new TextRun({
-                      text: proposal.reviewer.reviewer3Code,
+                      text: getLecturerName(proposal.reviewer.reviewer3Code),
                     }),
                   ] : []),
                 ],
@@ -457,11 +464,18 @@ export const exportProposalTemplate = async () => {
   saveAs(blob, 'Capstone_Proposal_Template.docx');
 };
 
-export const exportAllProposalsToZip = async (proposals: CapstoneProposalResponse[]) => {
+export const exportAllProposalsToZip = async (proposals: CapstoneProposalResponse[], lecturers?: Lecturer[]) => {
   if (proposals.length === 0) {
     alert('Không có đề tài nào để tải xuống');
     return;
   }
+
+  // Helper function to get lecturer name
+  const getLecturerName = (code: string): string => {
+    if (!lecturers) return code;
+    const lecturer = lecturers.find(l => l.lecturerCode === code);
+    return lecturer ? `${lecturer.fullName} (${code})` : code;
+  };
 
   const zip = new JSZip();
   
@@ -625,11 +639,11 @@ export const exportAllProposalsToZip = async (proposals: CapstoneProposalRespons
               new Paragraph({
                 children: [
                   new TextRun({
-                    text: 'Lecturer 1: ',
+                    text: 'Main Lecturer (Giảng viên chính): ',
                     bold: true,
                   }),
                   new TextRun({
-                    text: proposal.lecturerCode1 || 'No information',
+                    text: proposal.lecturerCode1 ? getLecturerName(proposal.lecturerCode1) : 'No information',
                   }),
                 ],
                 spacing: { after: 100 },
@@ -638,11 +652,11 @@ export const exportAllProposalsToZip = async (proposals: CapstoneProposalRespons
                 new Paragraph({
                   children: [
                     new TextRun({
-                      text: 'Lecturer 2: ',
+                      text: 'Co-Lecturer (Giảng viên phụ): ',
                       bold: true,
                     }),
                     new TextRun({
-                      text: proposal.lecturerCode2,
+                      text: getLecturerName(proposal.lecturerCode2),
                     }),
                   ],
                   spacing: { after: 100 },
@@ -666,13 +680,13 @@ export const exportAllProposalsToZip = async (proposals: CapstoneProposalRespons
                       new TextRun({
                         text: new Date(proposal.review1At).toLocaleString('en-US'),
                       }),
-                      ...(proposal.reviewer.reviewer1Code ? [
+                      ...(proposal.reviewer && proposal.reviewer.reviewer1Code ? [
                         new TextRun({
                           text: ' - Reviewer: ',
                           bold: true,
                         }),
                         new TextRun({
-                          text: proposal.reviewer.reviewer1Code,
+                          text: getLecturerName(proposal.reviewer.reviewer1Code),
                         }),
                       ] : []),
                     ],
@@ -689,13 +703,13 @@ export const exportAllProposalsToZip = async (proposals: CapstoneProposalRespons
                       new TextRun({
                         text: new Date(proposal.review2At).toLocaleString('en-US'),
                       }),
-                      ...(proposal.reviewer.reviewer2Code ? [
+                      ...(proposal.reviewer && proposal.reviewer.reviewer2Code ? [
                         new TextRun({
                           text: ' - Reviewer: ',
                           bold: true,
                         }),
                         new TextRun({
-                          text: proposal.reviewer.reviewer2Code,
+                          text: getLecturerName(proposal.reviewer.reviewer2Code),
                         }),
                       ] : []),
                     ],
@@ -712,13 +726,13 @@ export const exportAllProposalsToZip = async (proposals: CapstoneProposalRespons
                       new TextRun({
                         text: new Date(proposal.review3At).toLocaleString('en-US'),
                       }),
-                      ...(proposal.reviewer.reviewer3Code ? [
+                      ...(proposal.reviewer && proposal.reviewer.reviewer3Code ? [
                         new TextRun({
                           text: ' - Reviewer: ',
                           bold: true,
                         }),
                         new TextRun({
-                          text: proposal.reviewer.reviewer3Code,
+                          text: getLecturerName(proposal.reviewer.reviewer3Code),
                         }),
                       ] : []),
                     ],

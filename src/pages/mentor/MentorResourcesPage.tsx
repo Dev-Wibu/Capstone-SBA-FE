@@ -1114,12 +1114,12 @@ Students:
               <div>
                 <div className="flex justify-between items-center mb-3">
                   <label className="block text-sm font-medium text-gray-700">
-                    Danh sách sinh viên (tối đa 6 sinh viên) <span className="text-red-500">*</span>
+                    Danh sách sinh viên (tối đa 5 sinh viên) <span className="text-red-500">*</span>
                   </label>
-                  {studentCount < 6 && (
+                  {studentCount < 5 && (
                     <button
                       type="button"
-                      onClick={() => setStudentCount(prev => Math.min(prev + 1, 6))}
+                      onClick={() => setStudentCount(prev => Math.min(prev + 1, 5))}
                       className="px-3 py-1 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium flex items-center gap-1"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1132,7 +1132,7 @@ Students:
                 
                 {/* Dynamic student fields */}
                 {[...Array(studentCount)].map((_, index) => {
-                  const studentNum = (index + 1) as 1 | 2 | 3 | 4 | 5 | 6;
+                  const studentNum = (index + 1) as 1 | 2 | 3 | 4 | 5;
                   const studentIdKey = `student${studentNum}Id` as keyof typeof formData.students;
                   const studentNameKey = `student${studentNum}Name` as keyof typeof formData.students;
                   
