@@ -72,8 +72,6 @@ const MentorResourcesPage = () => {
     semesterId: 0,
     lecturerCode1: user?.lecturerCode || '',
     lecturerCode2: '',
-    isAdmin1: false,
-    isAdmin2: false,
   });
 
   // Danh sách status cho từng filter
@@ -170,8 +168,6 @@ const MentorResourcesPage = () => {
         student6Name: proposal.students?.student6Name || '',
       },
       semesterId: proposal.semester?.id || 0,
-      isAdmin1: false,
-      isAdmin2: false,
       lecturerCode1: proposal.lecturerCode1 || user?.lecturerCode || '',
       lecturerCode2: proposal.lecturerCode2 || '',
     });
@@ -234,8 +230,6 @@ const MentorResourcesPage = () => {
         semester: {
           id: formData.semesterId
         },
-        isAdmin1: formData.isAdmin1,
-        isAdmin2: formData.isAdmin2,
         lecturerCode1: formData.lecturerCode1,
       };
 
@@ -272,8 +266,6 @@ const MentorResourcesPage = () => {
           student6Name: '',
         },
         semesterId: semesters.find(s => s.current)?.id || 0,
-        isAdmin1: false,
-        isAdmin2: false,
         lecturerCode1: user?.lecturerCode || '',
         lecturerCode2: '',
       });
@@ -779,8 +771,6 @@ const MentorResourcesPage = () => {
                 student6Name: currentProposal.students?.student6Name || '',
               },
               semesterId: currentProposal.semester?.id || 0,
-              isAdmin1: false,
-              isAdmin2: false,
               lecturerCode1: currentProposal.lecturerCode1 || user?.lecturerCode || '',
               lecturerCode2: currentProposal.lecturerCode2 || '',
             });
@@ -845,8 +835,6 @@ const MentorResourcesPage = () => {
                         student6Name: '',
                       },
                       semesterId: semesters.find(s => s.current)?.id || 0,
-                      isAdmin1: false,
-                      isAdmin2: false,
                       lecturerCode1: user?.lecturerCode || '',
                       lecturerCode2: '',
                     });
@@ -962,7 +950,27 @@ Students:
                   >
                     <option value="">-- Không chọn --</option>
                     {lecturers
-                      .filter(l => l.lecturerCode !== user?.lecturerCode) // Loại trừ user hiện tại
+                      .filter(l => {
+                        // Loại trừ user hiện tại
+                        if (l.lecturerCode === user?.lecturerCode) return false;
+                        
+                        // Lấy học kỳ hiện tại (current: true)
+                        const currentSemester = semesters.find(s => s.current === true);
+                        
+                        // Nếu có học kỳ hiện tại, loại trừ giảng viên trong hội đồng duyệt
+                        if (currentSemester) {
+                          const reviewerCodes = [
+                            currentSemester.reviewerCode1,
+                            currentSemester.reviewerCode2,
+                            currentSemester.reviewerCode3,
+                            currentSemester.reviewerCode4,
+                          ].filter(Boolean); // Remove undefined/null values
+                          
+                          if (reviewerCodes.includes(l.lecturerCode)) return false;
+                        }
+                        
+                        return true;
+                      })
                       .map(l => (
                         <option key={l.id} value={l.lecturerCode}>{l.fullName} ({l.lecturerCode})</option>
                       ))
@@ -1241,8 +1249,6 @@ Students:
                         student6Name: '',
                       },
                       semesterId: semesters.find(s => s.current)?.id || 0,
-                      isAdmin1: false,
-                      isAdmin2: false,
                       lecturerCode1: user?.lecturerCode || '',
                       lecturerCode2: '',
                     });

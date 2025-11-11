@@ -59,7 +59,8 @@ const AllProposalsPage = () => {
   // Filter projects
   const filteredProjects = projects.filter(p => {
     if (selectedStatus === 'approved') {
-      return (p.isAdmin1 && p.admin1Id === user?.id) || (p.isAdmin2 && p.admin2Id === user?.id);
+      // Since we removed admin approval fields, show all approved proposals
+      return p.status === 'APPROVED' || p.status === 'DUPLICATE_ACCEPTED';
     }
     
     if (selectedStatus === 'rejected') {
@@ -69,9 +70,9 @@ const AllProposalsPage = () => {
     return false;
   });
 
-  // Count proposals approved by current admin
+  // Count approved proposals
   const approvedByMeCount = projects.filter(p => 
-    (p.isAdmin1 && p.admin1Id === user?.id) || (p.isAdmin2 && p.admin2Id === user?.id)
+    p.status === 'APPROVED' || p.status === 'DUPLICATE_ACCEPTED'
   ).length;
 
   // Count proposals rejected by current admin

@@ -65,6 +65,10 @@ export interface Semester {
   endDate: string;
   current: boolean;
   startDate: string;
+  reviewerCode1?: string;
+  reviewerCode2?: string;
+  reviewerCode3?: string;
+  reviewerCode4?: string;
 }
 
 // Students interface (object with fixed keys, max 6 students)
@@ -122,10 +126,11 @@ export interface CapstoneProposal {
   review1At?: string | null;
   review2At?: string | null;
   review3At?: string | null;
-  isAdmin1: boolean;
-  isAdmin2: boolean;
-  admin1Id?: number | null;
-  admin2Id?: number | null;
+  // Reviewer approval flags
+  isReviewerApprove1?: boolean | null;
+  isReviewerApprove2?: boolean | null;
+  isReviewerApprove3?: boolean | null;
+  isReviewerApprove4?: boolean | null;
 }
 
 export interface CapstoneProposalResponse {
@@ -144,14 +149,14 @@ export interface CapstoneProposalResponse {
   review1At: string | null;
   review2At: string | null;
   review3At: string | null;
-  reviewer: Reviewer;
+  reviewer: Reviewer | null;
   createdAt: string;
   updatedAt: string;
-  // Admin approval flags
-  isAdmin1: boolean | null;
-  admin1Id: number | null;
-  isAdmin2: boolean | null;
-  admin2Id: number | null;
+  // Reviewer approval flags
+  isReviewerApprove1: boolean | null;
+  isReviewerApprove2: boolean | null;
+  isReviewerApprove3: boolean | null;
+  isReviewerApprove4: boolean | null;
 }
 
 // Resource interfaces

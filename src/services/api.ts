@@ -100,6 +100,26 @@ export const createSemester = async (data: {
 };
 
 /**
+ * Cập nhật semester và thêm hội đồng duyệt đồ án
+ */
+export const updateSemesterWithReviewBoard = async (data: {
+  id: number;
+  name: string;
+  semesterCode: string;
+  academic_year: number;
+  reviewerCode1: string;
+  reviewerCode2: string;
+  reviewerCode3: string;
+  reviewerCode4: string;
+  endDate: string;
+  current: boolean;
+  startDate: string;
+}): Promise<Semester> => {
+  const response = await api.put<Semester>('/api/semester', data);
+  return response.data;
+};
+
+/**
  * Cập nhật semester
  */
 export const updateSemester = async (

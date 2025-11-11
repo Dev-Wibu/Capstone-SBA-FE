@@ -7,9 +7,18 @@ interface AddSemesterModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  onSemesterCreated?: (semesterData: {
+    id: number;
+    name: string;
+    semesterCode: string;
+    academic_year: number;
+    startDate: string;
+    endDate: string;
+    current: boolean;
+  }) => void;
 }
 
-const AddSemesterModal = ({ isOpen, onClose, onSuccess }: AddSemesterModalProps) => {
+const AddSemesterModal = ({ isOpen, onClose, onSuccess, onSemesterCreated }: AddSemesterModalProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState<SemesterFormData>({
     name: '',
@@ -45,7 +54,7 @@ const AddSemesterModal = ({ isOpen, onClose, onSuccess }: AddSemesterModalProps)
         endDate: endDateISO,
       };
 
-      await createSemester(payload);
+      const createdSemester = await createSemester(payload);
 
       setFormData({
         name: '',
@@ -55,9 +64,22 @@ const AddSemesterModal = ({ isOpen, onClose, onSuccess }: AddSemesterModalProps)
         startDate: '',
         endDate: '',
       });
-
-      alert('Thêm học kỳ thành công!');
-      onSuccess();
+      
+      // Call onSemesterCreated callback to open review board modal
+      if (onSemesterCreated && createdSemester.id) {
+        onSemesterCreated({
+          id: createdSemester.id,
+          name: createdSemester.name,
+          semesterCode: createdSemester.semesterCode,
+          academic_year: formData.academic_year,
+          startDate: startDateISO,
+          endDate: endDateISO,
+          current: createdSemester.current,
+        });
+      } else {
+        onSuccess();
+      }
+      
       onClose();
     } catch (error) {
       alert('Thêm học kỳ thất bại. Vui lòng thử lại!');

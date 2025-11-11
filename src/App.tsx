@@ -8,7 +8,7 @@ import { Toaster } from 'sonner';
 // Pages imports organized by role
 import { LoginPage, RegisterPage } from './pages/auth';
 import { AdminPage, AllProposalsPage, AdminSchedulePage } from './pages/admin';
-import { HomePage, SchedulePage, MentorResourcesPage } from './pages/mentor';
+import { HomePage, SchedulePage, MentorResourcesPage, ReviewBoardPage } from './pages/mentor';
 import { ProposalHistoryPage } from './pages/shared';
 
 function App() {
@@ -46,6 +46,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/resources" element={<MentorResourcesPage />} />
             <Route path="/schedule" element={<SchedulePage />} />
+            <Route path="/review-board" element={<ReviewBoardPage />} />
           </Route>
           
           {/* Admin Routes */}

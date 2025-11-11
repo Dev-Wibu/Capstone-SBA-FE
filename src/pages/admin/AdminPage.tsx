@@ -5,6 +5,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'sonner';
 import { exportAllProposalsToZip } from '../../utils/exportDocx';
 import RatioSettingModal from '../../components/RatioSettingModal';
+import AddSemesterModal from '../../components/AddSemesterModal';
+import ReviewBoardModal from '../../components/ReviewBoardModal';
+import ViewReviewBoardModal from '../../components/ViewReviewBoardModal';
 
 const AdminPage = () => {
   const { user } = useAuth();
@@ -16,6 +19,24 @@ const AdminPage = () => {
   
   // Ratio setting modal
   const [showRatioModal, setShowRatioModal] = useState(false);
+  
+  // Add semester modal
+  const [showAddSemesterModal, setShowAddSemesterModal] = useState(false);
+  
+  // Review board modal
+  const [showReviewBoardModal, setShowReviewBoardModal] = useState(false);
+  const [newSemesterData, setNewSemesterData] = useState<{
+    id: number;
+    name: string;
+    semesterCode: string;
+    academic_year: number;
+    startDate: string;
+    endDate: string;
+    current: boolean;
+  } | null>(null);
+  
+  // View review board modal
+  const [showViewReviewBoardModal, setShowViewReviewBoardModal] = useState(false);
 
   // Fetch proposals từ API
   useEffect(() => {
@@ -107,13 +128,29 @@ const AdminPage = () => {
           <h1 className="text-3xl font-bold text-gray-900">
             Quản trị hệ thống - Duyệt đề tài
           </h1>
-          <button
-            onClick={() => setShowRatioModal(true)}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center gap-2"
-          >
-            <span>⚙️</span>
-            <span>Cài đặt hệ số</span>
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowAddSemesterModal(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center gap-2"
+            >
+              <span>📅</span>
+              <span>Thêm học kỳ</span>
+            </button>
+            <button
+              onClick={() => setShowViewReviewBoardModal(true)}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium flex items-center gap-2"
+            >
+              <span>👥</span>
+              <span>Xem hội đồng duyệt</span>
+            </button>
+            <button
+              onClick={() => setShowRatioModal(true)}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium flex items-center gap-2"
+            >
+              <span>⚙️</span>
+              <span>Cài đặt hệ số</span>
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <span className="flex items-center gap-1 px-3 py-1 bg-green-100 text-green-800 rounded-full font-medium">
@@ -366,6 +403,44 @@ const AdminPage = () => {
       <RatioSettingModal
         isOpen={showRatioModal}
         onClose={() => setShowRatioModal(false)}
+      />
+
+      {/* Add Semester Modal */}
+      <AddSemesterModal
+        isOpen={showAddSemesterModal}
+        onClose={() => setShowAddSemesterModal(false)}
+        onSuccess={() => {
+          setShowAddSemesterModal(false);
+          toast.success('Thêm học kỳ thành công!');
+        }}
+        onSemesterCreated={(semesterData) => {
+          setNewSemesterData(semesterData);
+          setShowAddSemesterModal(false);
+          setShowReviewBoardModal(true);
+        }}
+      />
+
+      {/* Review Board Modal */}
+      {newSemesterData && (
+        <ReviewBoardModal
+          isOpen={showReviewBoardModal}
+          onClose={() => {
+            setShowReviewBoardModal(false);
+            setNewSemesterData(null);
+          }}
+          onSuccess={() => {
+            setShowReviewBoardModal(false);
+            setNewSemesterData(null);
+            fetchProposals();
+          }}
+          semesterData={newSemesterData}
+        />
+      )}
+
+      {/* View Review Board Modal */}
+      <ViewReviewBoardModal
+        isOpen={showViewReviewBoardModal}
+        onClose={() => setShowViewReviewBoardModal(false)}
       />
     </div>
   );
