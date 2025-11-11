@@ -223,6 +223,11 @@ const AllProposalsPage = () => {
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
+                      {project.code && (
+                        <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded font-mono font-semibold">
+                          {project.code}
+                        </span>
+                      )}
                       <h3 className="text-lg font-bold text-gray-900">
                         {project.title}
                       </h3>

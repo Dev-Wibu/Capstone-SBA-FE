@@ -123,72 +123,51 @@ const ProposalComparisonModal = ({
   };
 
   const renderDiff = (diff: any[], label: string) => {
+    // Lấy text từ current và duplicate proposal
+    let currentText = '';
+    let duplicateText = '';
+    
+    diff.forEach((part) => {
+      const [operation, text] = part;
+      if (operation === -1) {
+        // Text chỉ có trong duplicate (bài cũ)
+        duplicateText += text;
+      } else if (operation === 1) {
+        // Text chỉ có trong current (bài mới)
+        currentText += text;
+      } else {
+        // Text giống nhau ở cả 2
+        currentText += text;
+        duplicateText += text;
+      }
+    });
+
     return (
       <div className="mb-6">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">{label}</h3>
         <div className="grid grid-cols-2 gap-4">
           {/* Bài mới (current) */}
-          <div className="border border-red-200 rounded-lg bg-red-50/50">
-            <div className="bg-red-100 px-4 py-2 border-b border-red-200">
-              <span className="text-sm font-medium text-red-900">📝 Bài đang upload</span>
+          <div className="border border-blue-200 rounded-lg bg-blue-50/50">
+            <div className="bg-blue-100 px-4 py-2 border-b border-blue-200">
+              <span className="text-sm font-medium text-blue-900">📝 Đề tài hiện tại</span>
             </div>
             <div className="p-4">
-              <div className="text-sm leading-relaxed font-mono whitespace-pre-wrap break-words">
-                {diff.map((part, index) => {
-                  const [operation, text] = part;
-                  if (operation === -1) {
-                    // Text bị xóa (có trong bài cũ, không có trong bài mới)
-                    return null;
-                  } else if (operation === 1) {
-                    // Text mới thêm (có trong bài mới, không có trong bài cũ)
-                    return (
-                      <span key={index} className="bg-green-200 text-green-900">
-                        {text}
-                      </span>
-                    );
-                  } else {
-                    // Text giống nhau
-                    return (
-                      <span key={index} className="text-gray-700">
-                        {text}
-                      </span>
-                    );
-                  }
-                })}
+              <div className="text-sm leading-relaxed whitespace-pre-wrap break-words text-gray-700">
+                {currentText}
               </div>
             </div>
           </div>
 
           {/* Bài cũ (duplicate) */}
-          <div className="border border-blue-200 rounded-lg bg-blue-50/50">
-            <div className="bg-blue-100 px-4 py-2 border-b border-blue-200">
-              <span className="text-sm font-medium text-blue-900">
-                🔍 Bài trùng lặp (ID: {duplicateProposal.id})
+          <div className="border border-orange-200 rounded-lg bg-orange-50/50">
+            <div className="bg-orange-100 px-4 py-2 border-b border-orange-200">
+              <span className="text-sm font-medium text-orange-900">
+                🔍 Đề tài trùng lặp (ID: {duplicateProposal.id})
               </span>
             </div>
             <div className="p-4">
-              <div className="text-sm leading-relaxed font-mono whitespace-pre-wrap break-words">
-                {diff.map((part, index) => {
-                  const [operation, text] = part;
-                  if (operation === -1) {
-                    // Text bị xóa (có trong bài cũ, không có trong bài mới)
-                    return (
-                      <span key={index} className="bg-red-200 text-red-900 line-through">
-                        {text}
-                      </span>
-                    );
-                  } else if (operation === 1) {
-                    // Text mới thêm
-                    return null;
-                  } else {
-                    // Text giống nhau
-                    return (
-                      <span key={index} className="text-gray-700">
-                        {text}
-                      </span>
-                    );
-                  }
-                })}
+              <div className="text-sm leading-relaxed whitespace-pre-wrap break-words text-gray-700">
+                {duplicateText}
               </div>
             </div>
           </div>
@@ -202,7 +181,7 @@ const ProposalComparisonModal = ({
   const similarityIcon = getSimilarityIcon(semanticSimilarity);
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-md flex items-center justify-center p-4 z-[100]">
       <div className="bg-white rounded-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white p-6">

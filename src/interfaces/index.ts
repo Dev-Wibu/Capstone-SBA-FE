@@ -135,6 +135,7 @@ export interface CapstoneProposal {
 
 export interface CapstoneProposalResponse {
   id: number| null;
+  code?: string | null;
   title: string;
   context: string;
   description: string;

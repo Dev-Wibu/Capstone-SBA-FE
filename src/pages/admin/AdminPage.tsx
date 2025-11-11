@@ -140,16 +140,19 @@ const AdminPage = () => {
     return colorMap[status] || 'bg-gray-100 text-gray-800';
   };
 
-  // Filter projects theo status
-  const filteredProjects = filterStatus === 'all' 
+  // Filter projects theo status và loại bỏ proposal có id = 1
+  const filteredProjects = (filterStatus === 'all' 
     ? projects 
-    : projects.filter(p => p.status === filterStatus);
+    : projects.filter(p => p.status === filterStatus)
+  ).filter(p => p.id !== 1);
 
-  // Đếm số lượng theo từng status
-  const statusCounts = projects.reduce((acc, project) => {
-    acc[project.status] = (acc[project.status] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  // Đếm số lượng theo từng status (không tính proposal có id = 1)
+  const statusCounts = projects
+    .filter(p => p.id !== 1)
+    .reduce((acc, project) => {
+      acc[project.status] = (acc[project.status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
 
   // Helper: Format date
   const formatDate = (dateString: string) => {
@@ -224,7 +227,7 @@ const AdminPage = () => {
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            Tất cả ({projects.length})
+            Tất cả ({projects.filter(p => p.id !== 1).length})
           </button>
           <button
             onClick={() => setFilterStatus('DUPLICATE_ACCEPTED')}

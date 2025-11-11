@@ -56,33 +56,49 @@ const ReviewBoardPage = () => {
 
         // Nếu là reviewer, filter proposals thuộc semester hiện tại
         if (position !== null) {
+          console.log('=== DEBUG REVIEW BOARD ===');
+          console.log('User lecturerCode:', lecturerCode);
+          console.log('Reviewer position:', position);
+          console.log('Total proposals:', proposalsData.length);
+          console.log('Current semester ID:', current.id);
+          
           const filtered = proposalsData.filter(p => {
-            if (p.semester?.id !== current.id) return false;
+            console.log(`\n--- Proposal ${p.id}: ${p.title} ---`);
+            console.log('Semester ID:', p.semester?.id, 'vs', current.id);
+            console.log('Status:', p.status);
             
-            // Chỉ hiển thị proposals đang trong giai đoạn review (REVIEW_1, REVIEW_2, REVIEW_3)
-            const reviewStatuses = ['REVIEW_1', 'REVIEW_2', 'REVIEW_3'];
-            if (!reviewStatuses.includes(p.status)) return false;
+            if (p.semester?.id !== current.id) {
+              console.log('❌ Wrong semester');
+              return false;
+            }
             
-            // Kiểm tra xem user có phải là reviewer1 hoặc reviewer2 của proposal này không
-            const isReviewer1 = p.reviewer?.reviewer1Code === lecturerCode;
-            const isReviewer2 = p.reviewer?.reviewer2Code === lecturerCode;
+            // Hiển thị proposals từ DUPLICATE_ACCEPTED trở đi (đã qua kiểm tra trùng lặp)
+            const validStatuses = ['DUPLICATE_ACCEPTED', 'REVIEW_1', 'REVIEW_2', 'REVIEW_3', 'DEFENSE', 'SECOND_DEFENSE', 'COMPLETED'];
+            if (!validStatuses.includes(p.status)) {
+              console.log('❌ Not in valid status for review');
+              return false;
+            }
             
-            console.log(`Proposal ${p.id}:`, {
-              title: p.title,
-              status: p.status,
-              reviewer1Code: p.reviewer?.reviewer1Code,
-              reviewer2Code: p.reviewer?.reviewer2Code,
-              userCode: lecturerCode,
-              isReviewer1,
-              isReviewer2,
-              shouldShow: isReviewer1 || isReviewer2
-            });
+            // Đếm số reviewer đã approve/reject (khác null)
+            const approvedCount = [
+              p.isReviewerApprove1,
+              p.isReviewerApprove2,
+              p.isReviewerApprove3,
+              p.isReviewerApprove4
+            ].filter(status => status !== null).length;
             
-            return isReviewer1 || isReviewer2;
+            console.log('Approved count:', approvedCount);
+            console.log(`isReviewerApprove${position}:`, position === 1 ? p.isReviewerApprove1 : position === 2 ? p.isReviewerApprove2 : position === 3 ? p.isReviewerApprove3 : p.isReviewerApprove4);
+            console.log('✅ SHOW - User is reviewer', position);
+            
+            return true;
           });
           
+          console.log('\n=== SUMMARY ===');
           console.log('Total proposals:', proposalsData.length);
           console.log('Filtered proposals:', filtered.length);
+          console.log('==================\n');
+          
           setProposals(filtered);
         }
       }
@@ -100,7 +116,8 @@ const ReviewBoardPage = () => {
     } else if (filterStatus === 'pending') {
       setFilteredProposals(proposals.filter(p => getReviewStatus(p) === null));
     } else if (filterStatus === 'approved') {
-      setFilteredProposals(proposals.filter(p => getReviewStatus(p) !== null));
+      // Chỉ hiển thị những proposal mà user đã approve (true), không hiển thị từ chối (false)
+      setFilteredProposals(proposals.filter(p => getReviewStatus(p) === true));
     }
   }, [proposals, filterStatus, reviewerPosition]);
 
@@ -173,21 +190,15 @@ const ReviewBoardPage = () => {
 
   // Helper: Check if already approved/rejected by current reviewer
   const getReviewStatus = (proposal: CapstoneProposalResponse) => {
-    if (!user?.lecturerCode) return null;
+    if (!reviewerPosition) return null;
     
-    // Kiểm tra xem user là reviewer1 hay reviewer2
-    const isReviewer1 = proposal.reviewer?.reviewer1Code === user.lecturerCode;
-    const isReviewer2 = proposal.reviewer?.reviewer2Code === user.lecturerCode;
+    // Check approval status based on reviewer position in the council
+    if (reviewerPosition === 1) return proposal.isReviewerApprove1;
+    if (reviewerPosition === 2) return proposal.isReviewerApprove2;
+    if (reviewerPosition === 3) return proposal.isReviewerApprove3;
+    if (reviewerPosition === 4) return proposal.isReviewerApprove4;
     
-    let status = null;
-    if (isReviewer1) {
-      status = proposal.isReviewerApprove1;
-    } else if (isReviewer2) {
-      status = proposal.isReviewerApprove2;
-    }
-    
-    console.log(`Proposal ${proposal.id} - User ${user.lecturerCode} - isReviewer1: ${isReviewer1}, isReviewer2: ${isReviewer2}, status:`, status);
-    return status;
+    return null;
   };
 
   if (loading) {
@@ -294,7 +305,7 @@ const ReviewBoardPage = () => {
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
         >
-          Đã duyệt ({proposals.filter(p => getReviewStatus(p) !== null).length})
+          Đã duyệt ({proposals.filter(p => getReviewStatus(p) === true).length})
         </button>
       </div>
 
@@ -330,6 +341,11 @@ const ReviewBoardPage = () => {
                   {/* Header */}
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex-1">
+                      {proposal.code && (
+                        <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded font-mono font-semibold mb-2 inline-block">
+                          {proposal.code}
+                        </span>
+                      )}
                       <h3 className="text-lg font-bold text-gray-900 mb-2">
                         {proposal.title}
                       </h3>
@@ -387,23 +403,34 @@ const ReviewBoardPage = () => {
                     </button>
                   </div>
 
-                  {/* Action Buttons - Only show if not reviewed yet */}
-                  {reviewStatus === null && (
-                    <div className="flex gap-2 pt-4 border-t border-gray-200">
-                      <button
-                        onClick={() => handleApprove(proposal.id!)}
-                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
-                      >
-                        Duyệt
-                      </button>
-                      <button
-                        onClick={() => handleReject(proposal.id!)}
-                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
-                      >
-                        Từ chối
-                      </button>
-                    </div>
-                  )}
+                  {/* Action Buttons - Only show if not reviewed yet AND less than 2 reviewers */}
+                  {(() => {
+                    // Đếm số người đã review (khác null)
+                    const reviewCount = [
+                      proposal.isReviewerApprove1,
+                      proposal.isReviewerApprove2,
+                      proposal.isReviewerApprove3,
+                      proposal.isReviewerApprove4
+                    ].filter(status => status !== null).length;
+                    
+                    // Chỉ hiển thị nút nếu: chưa review VÀ chưa đủ 2 người review
+                    return reviewStatus === null && reviewCount < 2 && (
+                      <div className="flex gap-2 pt-4 border-t border-gray-200">
+                        <button
+                          onClick={() => handleApprove(proposal.id!)}
+                          className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium"
+                        >
+                          Duyệt
+                        </button>
+                        <button
+                          onClick={() => handleReject(proposal.id!)}
+                          className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
+                        >
+                          Từ chối
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             );

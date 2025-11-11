@@ -227,6 +227,20 @@ export const reviewProposal = async (
   });
 };
 
+/**
+ * Kiểm tra trùng lặp proposal
+ * @param proposalId - ID của proposal cần kiểm tra
+ */
+export const checkDuplicateProposal = async (proposalId: number): Promise<{
+  distance: number;
+  closestId: string;
+  currtentId: number;
+  duplicate: boolean;
+}> => {
+  const response = await api.get(`/api/capstone-proposal/check-duplicate/${proposalId}`);
+  return response.data;
+};
+
 // ===== Lecturer APIs =====
 /**
  * Lấy danh sách tất cả lecturers
@@ -310,5 +324,88 @@ export const updateRatio = async (id: number, ratio: number): Promise<void> => {
  */
 export const getRatio = async (): Promise<{ id: number; ratio: number }> => {
   const response = await api.get('/api/capstone-proposal/rate');
+  return response.data;
+};
+
+// ===== Council APIs =====
+/**
+ * Tạo hội đồng bảo vệ đồ án mới
+ */
+export const createCouncil = async (data: {
+  name: string;
+  description: string;
+  semesterId: number;
+  members: Array<{
+    lecturerId: number;
+    role: 'PRESIDENT' | 'SECRETARY' | 'REVIEWER' | 'GUEST';
+  }>;
+}): Promise<any> => {
+  const response = await api.post('/api/councils', data);
+  return response.data;
+};
+
+/**
+ * Lấy danh sách tất cả councils
+ */
+export const getCouncils = async (): Promise<any[]> => {
+  const response = await api.get('/api/councils');
+  return response.data;
+};
+
+/**
+ * Lấy thông tin council theo ID
+ */
+export const getCouncilById = async (id: number): Promise<any> => {
+  const response = await api.get(`/api/councils/${id}`);
+  return response.data;
+};
+
+/**
+ * Cập nhật council
+ */
+export const updateCouncil = async (
+  id: number,
+  data: {
+    name: string;
+    description: string;
+    semesterId: number;
+    members: Array<{
+      lecturerId: number;
+      role: 'PRESIDENT' | 'SECRETARY' | 'REVIEWER' | 'GUEST';
+    }>;
+  }
+): Promise<any> => {
+  const response = await api.put(`/api/councils/${id}`, data);
+  return response.data;
+};
+
+/**
+ * Xóa council
+ */
+export const deleteCouncil = async (id: number): Promise<void> => {
+  await api.delete(`/api/councils/${id}`);
+};
+
+// ===== Schedule APIs =====
+/**
+ * Tạo lịch bảo vệ đồ án
+ */
+export const createSchedule = async (data: {
+  capstoneProjectId: number;
+  councilId: number;
+  defenseDate: string;
+  startTime: string;
+  endTime: string;
+  room: string;
+}): Promise<any> => {
+  const response = await api.post('/api/schedules', data);
+  return response.data;
+};
+
+/**
+ * Lấy danh sách lịch bảo vệ
+ */
+export const getSchedules = async (): Promise<any[]> => {
+  const response = await api.get('/api/schedules');
   return response.data;
 };

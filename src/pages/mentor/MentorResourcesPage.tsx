@@ -627,6 +627,14 @@ const MentorResourcesPage = () => {
                     <span className="text-xs text-gray-500">{formatDate(proposal.createdAt)}</span>
                   </div>
 
+                  {proposal.code && (
+                    <div className="mb-2">
+                      <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded font-mono font-semibold">
+                        {proposal.code}
+                      </span>
+                    </div>
+                  )}
+
                   <h3 className="text-lg font-bold text-gray-900 mb-2">
                     {proposal.title}
                   </h3>

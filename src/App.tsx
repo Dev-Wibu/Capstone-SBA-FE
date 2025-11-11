@@ -7,7 +7,7 @@ import { Toaster } from 'sonner';
 
 // Pages imports organized by role
 import { LoginPage, RegisterPage } from './pages/auth';
-import { AdminPage, AllProposalsPage, AdminSchedulePage } from './pages/admin';
+import { AdminPage, AllProposalsPage, AdminSchedulePage, CouncilsPage, DefenseSchedulePage } from './pages/admin';
 import { HomePage, SchedulePage, MentorResourcesPage, ReviewBoardPage } from './pages/mentor';
 import { ProposalHistoryPage } from './pages/shared';
 
@@ -61,7 +61,9 @@ function App() {
           >
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/proposals" element={<AllProposalsPage />} />
+            <Route path="/admin/review-management" element={<DefenseSchedulePage />} />
             <Route path="/admin/schedule" element={<AdminSchedulePage />} />
+            <Route path="/admin/councils" element={<CouncilsPage />} />
           </Route>
           
           <Route path="*" element={<Navigate to="/" replace />} />

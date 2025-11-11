@@ -1,7 +1,8 @@
 import type { CapstoneProposalResponse, Lecturer } from '@/interfaces';
 import { useEffect, useState } from 'react';
-import { getLecturerByCode, getLecturers } from '@/services/api';
+import { getLecturerByCode, getLecturers, checkDuplicateProposal, getProposalById } from '@/services/api';
 import ScheduleReviewModal from '@/components/ScheduleReviewModal';
+import ProposalComparisonModal from '@/components/ProposalComparisonModal';
 import { exportProposalToDocx } from '@/utils/exportDocx';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -17,11 +18,26 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
   const { user } = useAuth();
   const [reviewer1Info, setReviewer1Info] = useState<Lecturer | null>(null);
   const [reviewer2Info, setReviewer2Info] = useState<Lecturer | null>(null);
+  const [reviewer3Info, setReviewer3Info] = useState<Lecturer | null>(null);
+  const [reviewer4Info, setReviewer4Info] = useState<Lecturer | null>(null);
   const [loadingReviewers, setLoadingReviewers] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleReviewTime, setScheduleReviewTime] = useState<1 | 2 | 3>(1);
   const [isExporting, setIsExporting] = useState(false);
   const [allLecturers, setAllLecturers] = useState<Lecturer[]>([]);
+  
+  // Thêm state cho duplicate check
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+  const [duplicateResult, setDuplicateResult] = useState<{
+    distance: number;
+    closestId: string;
+    duplicate: boolean;
+    percentage: number;
+  } | null>(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [compareProposal, setCompareProposal] = useState<CapstoneProposalResponse | null>(null);
+  const [showComparisonModal, setShowComparisonModal] = useState(false);
+  const [isLoadingCompare, setIsLoadingCompare] = useState(false);
   
   // Thêm state cho mentor
   const [mentor1Info, setMentor1Info] = useState<Lecturer | null>(null);
@@ -40,17 +56,56 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
     }
   };
 
+  const handleCheckDuplicate = async () => {
+    if (!proposal || !proposal.id) return;
+    try {
+      setIsCheckingDuplicate(true);
+      const result = await checkDuplicateProposal(proposal.id);
+      
+      // Tính % trùng lặp từ L2 distance
+      // Công thức: Tương đồng = 1 - (Distance² / 2)
+      const cosineSimilarity = 1 - (Math.pow(result.distance, 2) / 2);
+      // Chuyển sang % và làm tròn 1 chữ số
+      const percentage = Math.max(0, Math.min(100, Math.round(cosineSimilarity * 1000) / 10));
+      
+      setDuplicateResult({
+        ...result,
+        percentage
+      });
+      setShowDuplicateModal(true);
+    } catch (error) {
+      alert('Có lỗi khi kiểm tra trùng lặp. Vui lòng thử lại.');
+    } finally {
+      setIsCheckingDuplicate(false);
+    }
+  };
+
+  const handleViewComparison = async () => {
+    if (!duplicateResult) return;
+    try {
+      setIsLoadingCompare(true);
+      const closestProposal = await getProposalById(Number(duplicateResult.closestId));
+      setCompareProposal(closestProposal);
+      setShowDuplicateModal(false);
+      setShowComparisonModal(true);
+    } catch (error) {
+      alert('Có lỗi khi tải thông tin đề tài để so sánh.');
+    } finally {
+      setIsLoadingCompare(false);
+    }
+  };
+
   useEffect(() => {
     const fetchReviewers = async () => {
-      if (!proposal || !isOpen) return;
+      if (!proposal || !isOpen || !proposal.semester) return;
       setLoadingReviewers(true);
       try {
         const promises: Promise<void>[] = [];
         
-        // Fetch reviewer 1 by code
-        if (proposal.reviewer?.reviewer1Code) {
+        // Fetch 4 reviewers từ semester (hội đồng duyệt)
+        if (proposal.semester.reviewerCode1) {
           promises.push(
-            getLecturerByCode(proposal.reviewer.reviewer1Code)
+            getLecturerByCode(proposal.semester.reviewerCode1)
               .then(data => setReviewer1Info(data))
               .catch(() => setReviewer1Info(null))
           );
@@ -58,15 +113,34 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
           setReviewer1Info(null);
         }
         
-        // Fetch reviewer 2 by code
-        if (proposal.reviewer?.reviewer2Code) {
+        if (proposal.semester.reviewerCode2) {
           promises.push(
-            getLecturerByCode(proposal.reviewer.reviewer2Code)
+            getLecturerByCode(proposal.semester.reviewerCode2)
               .then(data => setReviewer2Info(data))
               .catch(() => setReviewer2Info(null))
           );
         } else {
           setReviewer2Info(null);
+        }
+        
+        if (proposal.semester.reviewerCode3) {
+          promises.push(
+            getLecturerByCode(proposal.semester.reviewerCode3)
+              .then(data => setReviewer3Info(data))
+              .catch(() => setReviewer3Info(null))
+          );
+        } else {
+          setReviewer3Info(null);
+        }
+        
+        if (proposal.semester.reviewerCode4) {
+          promises.push(
+            getLecturerByCode(proposal.semester.reviewerCode4)
+              .then(data => setReviewer4Info(data))
+              .catch(() => setReviewer4Info(null))
+          );
+        } else {
+          setReviewer4Info(null);
         }
         
         await Promise.all(promises);
@@ -148,7 +222,7 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
   const config = getStatusConfig(proposal.status);
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-md flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl">
@@ -172,14 +246,29 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
                 <span>ID: #{proposal.id}</span>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Nút Check Duplicate */}
+              <button
+                onClick={handleCheckDuplicate}
+                disabled={isCheckingDuplicate}
+                className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Kiểm tra trùng lặp"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+                {isCheckingDuplicate ? 'Đang kiểm tra...' : 'Check Duplicate'}
+              </button>
+              {/* Nút Close */}
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600 transition"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -441,77 +530,129 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
             </div>
           )}
 
-          {/* Thông tin người duyệt (chỉ hiện khi có reviewer) */}
-          {(proposal.reviewer?.reviewer1Code || proposal.reviewer?.reviewer2Code) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
-              {proposal.reviewer?.reviewer1Code && (
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1 flex items-center gap-2">
-                    <span className="font-semibold">Người duyệt 1</span>
-                    {loadingReviewers && <span className="text-gray-400">(Đang tải...)</span>}
-                    {!loadingReviewers && reviewer1Info && (
-                      <span className="text-gray-700">{reviewer1Info.fullName} ({reviewer1Info.lecturerCode})</span>
-                    )}
-                    {!loadingReviewers && !reviewer1Info && proposal.reviewer?.reviewer1Name && (
-                      <span className="text-gray-700">{proposal.reviewer.reviewer1Name} ({proposal.reviewer.reviewer1Code})</span>
-                    )}
-                  </p>
-                  <p className="text-sm font-medium flex items-center gap-2">
-                    {proposal.review1At ? (
-                      <span className="text-green-600 flex items-center gap-1">
-                        <span>✅ Đã duyệt</span>
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                          {formatDate(proposal.review1At)}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-yellow-600 flex items-center gap-1">
-                        ⏳ Chờ duyệt
-                      </span>
-                    )}
-                  </p>
-                </div>
-              )}
-              {proposal.reviewer?.reviewer2Code && (
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1 flex items-center gap-2">
-                    <span className="font-semibold">Người duyệt 2</span>
-                    {loadingReviewers && <span className="text-gray-400">(Đang tải...)</span>}
-                    {!loadingReviewers && reviewer2Info && (
-                      <span className="text-gray-700">{reviewer2Info.fullName} ({reviewer2Info.lecturerCode})</span>
-                    )}
-                    {!loadingReviewers && !reviewer2Info && proposal.reviewer?.reviewer2Name && (
-                      <span className="text-gray-700">{proposal.reviewer.reviewer2Name} ({proposal.reviewer.reviewer2Code})</span>
-                    )}
-                  </p>
-                  <p className="text-sm font-medium flex items-center gap-2">
-                    {proposal.review2At ? (
-                      <span className="text-green-600 flex items-center gap-1">
-                        <span>✅ Đã duyệt</span>
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                          {formatDate(proposal.review2At)}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-yellow-600 flex items-center gap-1">
-                        ⏳ Chờ duyệt
-                      </span>
-                    )}
-                  </p>
-                </div>
-              )}
-              {/* Trường hợp có review3At (ví dụ vòng bổ sung) */}
-              {proposal.review3At && (
-                <div className="bg-indigo-50 p-3 rounded-lg md:col-span-2">
-                  <p className="text-xs text-indigo-700 mb-1 font-semibold">Review 3</p>
-                  <p className="text-sm font-medium text-indigo-900 flex items-center gap-2">
-                    <span>⏱ Thời gian:</span>
-                    <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
-                      {formatDate(proposal.review3At)}
-                    </span>
-                  </p>
-                </div>
-              )}
+          {/* Thông tin hội đồng duyệt (hiển thị người đã duyệt và từ chối) */}
+          {proposal.semester && (
+            (proposal.isReviewerApprove1 !== null && proposal.semester.reviewerCode1) ||
+            (proposal.isReviewerApprove2 !== null && proposal.semester.reviewerCode2) ||
+            (proposal.isReviewerApprove3 !== null && proposal.semester.reviewerCode3) ||
+            (proposal.isReviewerApprove4 !== null && proposal.semester.reviewerCode4)
+          ) && (
+            <div className="pt-4 border-t border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Hội đồng duyệt</h3>
+              <div className="flex flex-wrap gap-2">
+                {proposal.isReviewerApprove1 === true && proposal.semester.reviewerCode1 && (
+                  <div className="bg-green-50 px-3 py-2 rounded-lg border border-green-200">
+                    <p className="text-sm font-medium text-green-800 flex items-center gap-1">
+                      <span>✅</span>
+                      {loadingReviewers ? (
+                        <span>Đang tải...</span>
+                      ) : reviewer1Info ? (
+                        <span>{reviewer1Info.fullName} ({reviewer1Info.lecturerCode})</span>
+                      ) : (
+                        <span>({proposal.semester.reviewerCode1})</span>
+                      )}
+                    </p>
+                  </div>
+                )}
+                {proposal.isReviewerApprove1 === false && proposal.semester.reviewerCode1 && (
+                  <div className="bg-red-50 px-3 py-2 rounded-lg border border-red-200">
+                    <p className="text-sm font-medium text-red-800 flex items-center gap-1">
+                      <span>❌</span>
+                      {loadingReviewers ? (
+                        <span>Đang tải...</span>
+                      ) : reviewer1Info ? (
+                        <span>{reviewer1Info.fullName} ({reviewer1Info.lecturerCode})</span>
+                      ) : (
+                        <span>({proposal.semester.reviewerCode1})</span>
+                      )}
+                    </p>
+                  </div>
+                )}
+                {proposal.isReviewerApprove2 === true && proposal.semester.reviewerCode2 && (
+                  <div className="bg-green-50 px-3 py-2 rounded-lg border border-green-200">
+                    <p className="text-sm font-medium text-green-800 flex items-center gap-1">
+                      <span>✅</span>
+                      {loadingReviewers ? (
+                        <span>Đang tải...</span>
+                      ) : reviewer2Info ? (
+                        <span>{reviewer2Info.fullName} ({reviewer2Info.lecturerCode})</span>
+                      ) : (
+                        <span>({proposal.semester.reviewerCode2})</span>
+                      )}
+                    </p>
+                  </div>
+                )}
+                {proposal.isReviewerApprove2 === false && proposal.semester.reviewerCode2 && (
+                  <div className="bg-red-50 px-3 py-2 rounded-lg border border-red-200">
+                    <p className="text-sm font-medium text-red-800 flex items-center gap-1">
+                      <span>❌</span>
+                      {loadingReviewers ? (
+                        <span>Đang tải...</span>
+                      ) : reviewer2Info ? (
+                        <span>{reviewer2Info.fullName} ({reviewer2Info.lecturerCode})</span>
+                      ) : (
+                        <span>({proposal.semester.reviewerCode2})</span>
+                      )}
+                    </p>
+                  </div>
+                )}
+                {proposal.isReviewerApprove3 === true && proposal.semester.reviewerCode3 && (
+                  <div className="bg-green-50 px-3 py-2 rounded-lg border border-green-200">
+                    <p className="text-sm font-medium text-green-800 flex items-center gap-1">
+                      <span>✅</span>
+                      {loadingReviewers ? (
+                        <span>Đang tải...</span>
+                      ) : reviewer3Info ? (
+                        <span>{reviewer3Info.fullName} ({reviewer3Info.lecturerCode})</span>
+                      ) : (
+                        <span>({proposal.semester.reviewerCode3})</span>
+                      )}
+                    </p>
+                  </div>
+                )}
+                {proposal.isReviewerApprove3 === false && proposal.semester.reviewerCode3 && (
+                  <div className="bg-red-50 px-3 py-2 rounded-lg border border-red-200">
+                    <p className="text-sm font-medium text-red-800 flex items-center gap-1">
+                      <span>❌</span>
+                      {loadingReviewers ? (
+                        <span>Đang tải...</span>
+                      ) : reviewer3Info ? (
+                        <span>{reviewer3Info.fullName} ({reviewer3Info.lecturerCode})</span>
+                      ) : (
+                        <span>({proposal.semester.reviewerCode3})</span>
+                      )}
+                    </p>
+                  </div>
+                )}
+                {proposal.isReviewerApprove4 === true && proposal.semester.reviewerCode4 && (
+                  <div className="bg-green-50 px-3 py-2 rounded-lg border border-green-200">
+                    <p className="text-sm font-medium text-green-800 flex items-center gap-1">
+                      <span>✅</span>
+                      {loadingReviewers ? (
+                        <span>Đang tải...</span>
+                      ) : reviewer4Info ? (
+                        <span>{reviewer4Info.fullName} ({reviewer4Info.lecturerCode})</span>
+                      ) : (
+                        <span>({proposal.semester.reviewerCode4})</span>
+                      )}
+                    </p>
+                  </div>
+                )}
+                {proposal.isReviewerApprove4 === false && proposal.semester.reviewerCode4 && (
+                  <div className="bg-red-50 px-3 py-2 rounded-lg border border-red-200">
+                    <p className="text-sm font-medium text-red-800 flex items-center gap-1">
+                      <span>❌</span>
+                      {loadingReviewers ? (
+                        <span>Đang tải...</span>
+                      ) : reviewer4Info ? (
+                        <span>{reviewer4Info.fullName} ({reviewer4Info.lecturerCode})</span>
+                      ) : (
+                        <span>({proposal.semester.reviewerCode4})</span>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -582,6 +723,115 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
           </div>
         </div>
       </div>
+
+      {/* Modal hiển thị kết quả duplicate */}
+      {showDuplicateModal && duplicateResult && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Kết quả kiểm tra trùng lặp
+            </h3>
+            
+            <div className="space-y-4">
+              {/* Trạng thái duplicate */}
+              <div className={`p-4 rounded-lg border-2 ${duplicateResult.duplicate ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  {duplicateResult.duplicate ? (
+                    <>
+                      <span className="text-2xl">⚠️</span>
+                      <span className="font-bold text-red-700">Phát hiện trùng lặp!</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-2xl">✅</span>
+                      <span className="font-bold text-green-700">Không trùng lặp</span>
+                    </>
+                  )}
+                </div>
+                <p className="text-sm text-gray-600">
+                  {duplicateResult.duplicate 
+                    ? 'Đề tài này có nội dung trùng lặp với đề tài khác trong hệ thống.'
+                    : 'Đề tài này không trùng lặp với các đề tài khác.'}
+                </p>
+              </div>
+
+              {/* Thông tin chi tiết */}
+              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Độ tương đồng:</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full transition-all ${
+                          duplicateResult.percentage > 70 ? 'bg-red-500' : 
+                          duplicateResult.percentage > 40 ? 'bg-yellow-500' : 
+                          'bg-green-500'
+                        }`}
+                        style={{ width: `${duplicateResult.percentage}%` }}
+                      />
+                    </div>
+                    <span className="font-bold text-lg text-gray-900">
+                      {duplicateResult.percentage}%
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm text-gray-600">Đề tài gần nhất:</p>
+                  <p className="font-semibold text-gray-900">ID #{duplicateResult.closestId}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-gray-600">Distance score:</p>
+                  <p className="font-mono text-sm text-gray-700">{duplicateResult.distance.toFixed(4)}</p>
+                </div>
+              </div>
+
+              {/* Nút xem so sánh */}
+              <button
+                onClick={handleViewComparison}
+                disabled={isLoadingCompare}
+                className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoadingCompare ? 'Đang tải...' : 'Xem so sánh chi tiết'}
+              </button>
+            </div>
+
+            {/* Nút đóng */}
+            <button
+              onClick={() => setShowDuplicateModal(false)}
+              className="w-full mt-4 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition font-medium"
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal so sánh proposal */}
+      {proposal && (
+        <ProposalComparisonModal
+          isOpen={showComparisonModal}
+          onClose={() => {
+            setShowComparisonModal(false);
+            setCompareProposal(null);
+          }}
+          currentProposal={{
+            title: proposal.title,
+            context: proposal.context,
+            description: proposal.description,
+            func: proposal.func,
+            nonFunc: proposal.nonFunc,
+          }}
+          duplicateProposal={compareProposal}
+          currentProposalId={proposal.id}
+          semanticDistance={duplicateResult?.distance || 0}
+          showUploadAgainButton={false}
+        />
+      )}
 
       {/* Modal xếp lịch */}
       <ScheduleReviewModal
