@@ -1,5 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useState, useEffect } from 'react';
+import { getCouncils } from '@/services/api';
 import type { ReactElement } from 'react';
 
 interface NavItem {
@@ -13,11 +15,51 @@ const Navbar = () => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [isPresident, setIsPresident] = useState(false);
+  const [checkingPresident, setCheckingPresident] = useState(true);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
+
+  // Check if user is PRESIDENT of any council
+  useEffect(() => {
+    const checkIfPresident = async () => {
+      // Chỉ check cho MENTOR/LECTURER, không check cho ADMIN
+      if (!user?.email || user.role === 'ADMIN') {
+        setIsPresident(false);
+        setCheckingPresident(false);
+        return;
+      }
+
+      try {
+        const allCouncils = await getCouncils();
+        
+        // Check từng council xem user có phải PRESIDENT không
+        for (const council of allCouncils) {
+          const presidentMember = council.members?.find(
+            (member: any) => member.role === 'PRESIDENT' && member.lecturerEmail === user.email
+          );
+          
+          if (presidentMember) {
+            setIsPresident(true);
+            setCheckingPresident(false);
+            return;
+          }
+        }
+        
+        setIsPresident(false);
+      } catch (error) {
+        console.error('Error checking president status:', error);
+        setIsPresident(false);
+      } finally {
+        setCheckingPresident(false);
+      }
+    };
+
+    checkIfPresident();
+  }, [user?.email, user?.role]);
 
   // Tạo navItems dựa trên role
   const getNavItems = (): NavItem[] => {
@@ -63,16 +105,7 @@ const Navbar = () => {
     }
 
     // MENTOR và LECTURER
-    return [
-      {
-        name: 'Trang chủ',
-        path: '/',
-        icon: (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-          </svg>
-        ),
-      },
+    const baseItems: NavItem[] = [
       {
         name: 'Tài nguyên',
         path: '/resources',
@@ -101,6 +134,21 @@ const Navbar = () => {
         ),
       },
     ];
+
+    // Chỉ thêm menu "Chấm điểm bảo vệ" nếu user là PRESIDENT
+    if (!checkingPresident && isPresident) {
+      baseItems.push({
+        name: 'Chấm điểm bảo vệ',
+        path: '/defense-grading',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        ),
+      });
+    }
+
+    return baseItems;
   };
 
   const navItems = getNavItems();

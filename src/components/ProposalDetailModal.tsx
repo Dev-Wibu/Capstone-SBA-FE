@@ -1,6 +1,6 @@
 import type { CapstoneProposalResponse, Lecturer } from '@/interfaces';
-import { useEffect, useState } from 'react';
-import { getLecturerByCode, getLecturers, checkDuplicateProposal, getProposalById } from '@/services/api';
+import { useEffect, useState, memo } from 'react';
+import { getLecturerByCode, getLecturers, checkDuplicateProposal, getProposalById, getDefenseResultsByProposal } from '@/services/api';
 import ScheduleReviewModal from '@/components/ScheduleReviewModal';
 import ProposalComparisonModal from '@/components/ProposalComparisonModal';
 import { exportProposalToDocx } from '@/utils/exportDocx';
@@ -43,6 +43,10 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
   const [mentor1Info, setMentor1Info] = useState<Lecturer | null>(null);
   const [mentor2Info, setMentor2Info] = useState<Lecturer | null>(null);
   const [loadingMentors, setLoadingMentors] = useState(false);
+
+  // Thêm state cho defense results
+  const [defenseResults, setDefenseResults] = useState<any[]>([]);
+  const [loadingDefenseResults, setLoadingDefenseResults] = useState(false);
 
   const handleExportDocx = async () => {
     if (!proposal) return;
@@ -144,11 +148,37 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
         }
         
         await Promise.all(promises);
+      } catch (error) {
+        console.error('Error fetching reviewers:', error);
       } finally {
         setLoadingReviewers(false);
       }
     };
+
     fetchReviewers();
+  }, [proposal, isOpen]);
+
+  // Fetch defense results khi proposal status là COMPLETED
+  useEffect(() => {
+    const fetchDefenseResults = async () => {
+      if (!proposal || !isOpen || proposal.status !== 'COMPLETED') {
+        setDefenseResults([]);
+        return;
+      }
+      
+      setLoadingDefenseResults(true);
+      try {
+        const results = await getDefenseResultsByProposal(proposal.id!);
+        setDefenseResults(results);
+      } catch (error) {
+        console.error('Error fetching defense results:', error);
+        setDefenseResults([]);
+      } finally {
+        setLoadingDefenseResults(false);
+      }
+    };
+
+    fetchDefenseResults();
   }, [proposal, isOpen]);
 
   // Fetch thông tin mentor dựa trên lecturerCode
@@ -687,6 +717,86 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
           )}
         </div>
 
+        {/* Defense Results Section - Chỉ hiển thị khi status là COMPLETED */}
+        {proposal.status === 'COMPLETED' && defenseResults.length > 0 && (
+          <div className="p-6 bg-gradient-to-r from-green-50 to-emerald-50 border-t-4 border-green-500">
+            <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Kết quả bảo vệ đồ án
+            </h3>
+            
+            {loadingDefenseResults ? (
+              <p className="text-sm text-gray-600">Đang tải...</p>
+            ) : (
+              <div className="space-y-3">
+                {defenseResults.map((result) => (
+                  <div key={result.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                    {/* Schedule info */}
+                    <div className="mb-3 pb-3 border-b border-gray-200">
+                      <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          {result.schedule?.defenseDate}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {result.schedule?.startTime?.slice(0,5)} - {result.schedule?.endTime?.slice(0,5)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
+                          Phòng {result.schedule?.room}
+                        </span>
+                      </div>
+                      {result.schedule?.council && (
+                        <p className="text-xs text-gray-500 mt-2">
+                          Hội đồng: {result.schedule.council.name}
+                        </p>
+                      )}
+                    </div>
+                    
+                    {/* Result info */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Kết quả:</p>
+                        <span className={`inline-block px-3 py-1 rounded-lg font-semibold text-sm ${
+                          result.status === 'PASS' 
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}>
+                          {result.status === 'PASS' ? '✓ ĐẠT' : '✗ KHÔNG ĐẠT'}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Điểm số:</p>
+                        <p className="text-2xl font-bold text-indigo-600">{result.score}</p>
+                      </div>
+                    </div>
+                    
+                    {result.comments && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <p className="text-xs text-gray-500 mb-1">Nhận xét:</p>
+                        <p className="text-sm text-gray-700">{result.comments}</p>
+                      </div>
+                    )}
+                    
+                    <p className="text-xs text-gray-400 mt-3">
+                      Chấm lúc: {new Date(result.createdAt).toLocaleString('vi-VN')}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Footer */}
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-4 rounded-b-2xl">
           <div className="flex gap-3">
@@ -854,4 +964,4 @@ const ProposalDetailModal = ({ proposal, isOpen, onClose, onUploadAgain, onRefre
   );
 };
 
-export default ProposalDetailModal;
+export default memo(ProposalDetailModal);

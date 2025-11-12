@@ -1,51 +1,45 @@
 import { useState, useEffect } from 'react';
-import { getAllProposals } from '@/services/api';
+import { getAllProposals, getSchedules } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
-
-interface ReviewEvent {
-  id: number;
-  proposalTitle: string;
-  reviewTime: 1 | 2 | 3;
-  reviewAt: string;
-  lecturerCode: string;
-  type: 'my-proposal' | 'review-assigned';
-  status: string;
-}
+import type { CalendarEvent } from '@/interfaces';
 
 const SchedulePage = () => {
   const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [events, setEvents] = useState<ReviewEvent[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchReviewEvents();
+    fetchAllEvents();
   }, [user]);
 
-  const fetchReviewEvents = async () => {
-    if (!user?.lecturerCode) return;
+  const fetchAllEvents = async () => {
+    if (!user?.lecturerCode || !user?.email) return;
     
     try {
       setLoading(true);
-      const proposals = await getAllProposals();
-      const reviewEvents: ReviewEvent[] = [];
+      const [proposals, defenseSchedules] = await Promise.all([
+        getAllProposals(),
+        getSchedules()
+      ]);
 
+      const allEvents: CalendarEvent[] = [];
+
+      // 1. Fetch Review Events
       proposals.forEach((proposal) => {
         const currentLecturerCode = user.lecturerCode;
 
-        // Check if this is user's proposal (lecturerCode1 or lecturerCode2)
         const isMyProposal = 
           proposal.lecturerCode1 === currentLecturerCode || 
           proposal.lecturerCode2 === currentLecturerCode;
 
-        // Review 1 (có 2 reviewer: reviewer1 và reviewer2)
         if (proposal.review1At) {
           const isReviewAssigned = 
             proposal.reviewer?.reviewer1Code === currentLecturerCode ||
             proposal.reviewer?.reviewer2Code === currentLecturerCode;
           
           if (isMyProposal || isReviewAssigned) {
-            reviewEvents.push({
+            allEvents.push({
               id: proposal.id || 0,
               proposalTitle: proposal.title,
               reviewTime: 1,
@@ -53,18 +47,18 @@ const SchedulePage = () => {
               lecturerCode: proposal.reviewer?.reviewer1Code || '',
               type: isMyProposal ? 'my-proposal' : 'review-assigned',
               status: proposal.status,
+              eventType: 'review',
             });
           }
         }
 
-        // Review 2 (có 2 reviewer: reviewer3 và reviewer4)
         if (proposal.review2At) {
           const isReviewAssigned = 
             proposal.reviewer?.reviewer3Code === currentLecturerCode ||
             proposal.reviewer?.reviewer4Code === currentLecturerCode;
           
           if (isMyProposal || isReviewAssigned) {
-            reviewEvents.push({
+            allEvents.push({
               id: proposal.id || 0,
               proposalTitle: proposal.title,
               reviewTime: 2,
@@ -72,18 +66,18 @@ const SchedulePage = () => {
               lecturerCode: proposal.reviewer?.reviewer3Code || '',
               type: isMyProposal ? 'my-proposal' : 'review-assigned',
               status: proposal.status,
+              eventType: 'review',
             });
           }
         }
 
-        // Review 3 (có 2 reviewer: reviewer5 và reviewer6)
         if (proposal.review3At) {
           const isReviewAssigned = 
             proposal.reviewer?.reviewer5Code === currentLecturerCode ||
             proposal.reviewer?.reviewer6Code === currentLecturerCode;
           
           if (isMyProposal || isReviewAssigned) {
-            reviewEvents.push({
+            allEvents.push({
               id: proposal.id || 0,
               proposalTitle: proposal.title,
               reviewTime: 3,
@@ -91,19 +85,48 @@ const SchedulePage = () => {
               lecturerCode: proposal.reviewer?.reviewer5Code || '',
               type: isMyProposal ? 'my-proposal' : 'review-assigned',
               status: proposal.status,
+              eventType: 'review',
             });
           }
         }
       });
 
-      setEvents(reviewEvents);
+      // 2. Fetch Defense Events
+      const myDefenseSchedules = defenseSchedules.filter((schedule: any) => {
+        return schedule.council?.councilMembers?.some(
+          (member: any) => member.lecturerEmail === user.email
+        );
+      });
+
+      myDefenseSchedules.forEach((schedule: any) => {
+        const userRole = schedule.council?.councilMembers?.find(
+          (member: any) => member.lecturerEmail === user.email
+        )?.role || '';
+
+        allEvents.push({
+          id: schedule.id,
+          proposalTitle: schedule.capstoneProposal?.title || '',
+          proposalCode: schedule.capstoneProposal?.code || null,
+          defenseDate: schedule.defenseDate,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          room: schedule.room,
+          councilName: schedule.council?.name || '',
+          councilRole: userRole,
+          defenseRound: schedule.defenseRound,
+          eventType: 'defense',
+        });
+      });
+
+      setEvents(allEvents);
     } catch (error) {
+      console.error('Error fetching events:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const getEventTypeConfig = (type: ReviewEvent['type']) => {
+  const getEventTypeConfig = (type: 'my-proposal' | 'review-assigned') => {
     if (type === 'my-proposal') {
       return {
         bg: 'bg-blue-100',
@@ -131,13 +154,48 @@ const SchedulePage = () => {
     }
   };
 
-  const sortedEvents = [...events].sort((a, b) => 
-    new Date(a.reviewAt).getTime() - new Date(b.reviewAt).getTime()
-  );
+  const getDefenseEventConfig = (defenseRound: number | null) => {
+    const isRound2 = defenseRound === 2;
+    
+    if (isRound2) {
+      return {
+        bg: 'bg-orange-100',
+        border: 'border-orange-500',
+        text: 'text-orange-700',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        ),
+        label: '🔄 Bảo vệ Đợt 2',
+        dotColor: 'bg-orange-500',
+      };
+    } else {
+      return {
+        bg: 'bg-indigo-100',
+        border: 'border-indigo-500',
+        text: 'text-indigo-700',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+        ),
+        label: 'Bảo vệ Đợt 1',
+        dotColor: 'bg-indigo-500',
+      };
+    }
+  };
 
-  const upcomingEvents = sortedEvents.filter(event => 
-    new Date(event.reviewAt) >= new Date(new Date().setHours(0, 0, 0, 0))
-  );
+  const sortedEvents = [...events].sort((a, b) => {
+    const dateA = a.eventType === 'review' ? new Date(a.reviewAt) : new Date(a.defenseDate);
+    const dateB = b.eventType === 'review' ? new Date(b.reviewAt) : new Date(b.defenseDate);
+    return dateA.getTime() - dateB.getTime();
+  });
+
+  const upcomingEvents = sortedEvents.filter(event => {
+    const eventDate = event.eventType === 'review' ? new Date(event.reviewAt) : new Date(event.defenseDate);
+    return eventDate >= new Date(new Date().setHours(0, 0, 0, 0));
+  });
 
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
@@ -175,10 +233,10 @@ const SchedulePage = () => {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Lịch Review Đồ Án
+          Lịch làm việc
         </h1>
         <p className="text-gray-600">
-          Quản lý lịch review của các đồ án bạn hướng dẫn và được phân công review
+          Lịch review đồ án và lịch chấm hội đồng bảo vệ
         </p>
       </div>
 
@@ -191,6 +249,14 @@ const SchedulePage = () => {
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-purple-500 rounded"></div>
           <span className="text-sm text-gray-700">Review cho nhóm khác</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-indigo-500 rounded"></div>
+          <span className="text-sm text-gray-700">Bảo vệ đợt 1</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-orange-500 rounded"></div>
+          <span className="text-sm text-gray-700">Bảo vệ đợt 2</span>
         </div>
       </div>
 
@@ -244,45 +310,51 @@ const SchedulePage = () => {
                 const day = i + 1;
                 const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 
-                // Check events for this day
                 const eventsOnDay = events.filter(e => {
-                  const eventDate = new Date(e.reviewAt);
+                  const eventDate = e.eventType === 'review' 
+                    ? new Date(e.reviewAt)
+                    : new Date(e.defenseDate);
                   const eventDateStr = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}`;
                   return eventDateStr === dateStr;
                 });
                 
-                const hasMyProposal = eventsOnDay.some(e => e.type === 'my-proposal');
-                const hasReviewAssigned = eventsOnDay.some(e => e.type === 'review-assigned');
+                const hasReview = eventsOnDay.some(e => e.eventType === 'review');
+                const hasDefenseRound1 = eventsOnDay.some(e => e.eventType === 'defense' && (!e.defenseRound || e.defenseRound === 1));
+                const hasDefenseRound2 = eventsOnDay.some(e => e.eventType === 'defense' && e.defenseRound === 2);
                 const hasEvent = eventsOnDay.length > 0;
                 const isToday = new Date().toDateString() === new Date(dateStr).toDateString();
                 
-                // Determine background color based on event type
                 let bgColor = 'hover:bg-gray-100';
-                let textColor = '';
                 if (isToday) {
                   bgColor = 'bg-orange-500 text-white font-bold shadow-md';
-                } else if (hasMyProposal && hasReviewAssigned) {
-                  // Both types - gradient or mixed color
-                  bgColor = 'bg-gradient-to-br from-blue-100 to-purple-100 text-gray-800 font-medium hover:from-blue-200 hover:to-purple-200';
-                } else if (hasMyProposal) {
-                  bgColor = 'bg-blue-100 text-blue-700 font-medium hover:bg-blue-200';
-                } else if (hasReviewAssigned) {
-                  bgColor = 'bg-purple-100 text-purple-700 font-medium hover:bg-purple-200';
+                } else if (hasEvent) {
+                  if ((hasReview && (hasDefenseRound1 || hasDefenseRound2)) || (hasDefenseRound1 && hasDefenseRound2)) {
+                    bgColor = 'bg-gradient-to-br from-purple-100 via-indigo-100 to-orange-100 text-gray-800 font-medium';
+                  } else if (hasDefenseRound2) {
+                    bgColor = 'bg-orange-100 text-orange-700 font-medium hover:bg-orange-200';
+                  } else if (hasDefenseRound1) {
+                    bgColor = 'bg-indigo-100 text-indigo-700 font-medium hover:bg-indigo-200';
+                  } else if (hasReview) {
+                    bgColor = 'bg-purple-100 text-purple-700 font-medium hover:bg-purple-200';
+                  }
                 }
                 
                 return (
                   <div
                     key={day}
-                    className={`aspect-square flex items-center justify-center rounded-lg text-sm cursor-pointer transition-all relative ${bgColor} ${textColor}`}
+                    className={`aspect-square flex items-center justify-center rounded-lg text-sm cursor-pointer transition-all relative ${bgColor}`}
                   >
                     {day}
                     {hasEvent && !isToday && (
                       <div className="absolute bottom-1 flex gap-0.5">
-                        {hasMyProposal && (
-                          <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
-                        )}
-                        {hasReviewAssigned && (
+                        {hasReview && (
                           <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+                        )}
+                        {hasDefenseRound1 && (
+                          <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
+                        )}
+                        {hasDefenseRound2 && (
+                          <span className="w-1.5 h-1.5 bg-orange-500 rounded-full"></span>
                         )}
                       </div>
                     )}
@@ -297,64 +369,107 @@ const SchedulePage = () => {
         <div className="lg:col-span-1">
           <div className="bg-white rounded-xl shadow-lg p-6 border-t-4 border-orange-500">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
-              Review sắp tới
+              Lịch sắp tới ({upcomingEvents.length})
             </h2>
             
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[600px] overflow-y-auto">
               {upcomingEvents.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">
-                  Không có review nào sắp tới
+                  Không có lịch nào sắp tới
                 </p>
               ) : (
                 upcomingEvents.map((event, index) => {
-                  const config = getEventTypeConfig(event.type);
-                  return (
-                    <div
-                      key={`${event.id}-${event.reviewTime}-${index}`}
-                      className={`${config.bg} ${config.border} border-l-4 rounded-lg p-4 hover:shadow-md transition-all`}
-                    >
-                      <div className="flex items-start space-x-3">
-                        <div className={config.text}>
-                          {config.icon}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <h3 className="font-semibold text-gray-900 text-sm">
-                              Review {event.reviewTime}: {event.proposalTitle}
-                            </h3>
-                            <span className={`text-xs px-2 py-1 rounded ${config.bg} ${config.text} font-medium`}>
-                              {config.label}
-                            </span>
+                  if (event.eventType === 'review') {
+                    const config = getEventTypeConfig(event.type);
+                    return (
+                      <div
+                        key={`review-${event.id}-${event.reviewTime}-${index}`}
+                        className={`${config.bg} ${config.border} border-l-4 rounded-lg p-4 hover:shadow-md transition-all cursor-pointer`}
+                        onClick={() => setSelectedDate(new Date(event.reviewAt))}
+                      >
+                        <div className="flex items-start space-x-3">
+                          <div className={config.text}>
+                            {config.icon}
                           </div>
-                          <p className="text-xs text-gray-600 mb-2">
-                            Đồ án #{event.id}
-                          </p>
-                          <div className="flex items-center text-xs text-gray-500 space-x-3">
-                            <span className="flex items-center">
-                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                              {formatDate(event.reviewAt)}
-                            </span>
-                            <span className="flex items-center">
-                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              {new Date(event.reviewAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          {event.lecturerCode && event.type === 'review-assigned' && (
-                            <div className="flex items-center text-xs text-gray-500 mt-1">
-                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                              </svg>
-                              Phân công review: {event.lecturerCode}
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-1">
+                              <h3 className="font-semibold text-gray-900 text-sm">
+                                Review {event.reviewTime}
+                              </h3>
+                              <span className={`text-xs px-2 py-1 rounded ${config.bg} ${config.text} font-medium`}>
+                                {config.label}
+                              </span>
                             </div>
-                          )}
+                            <p className="text-sm text-gray-800 font-medium mb-1">{event.proposalTitle}</p>
+                            <div className="flex items-center text-xs text-gray-500 space-x-3">
+                              <span className="flex items-center">
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                {formatDate(event.reviewAt)}
+                              </span>
+                              <span className="flex items-center">
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                {new Date(event.reviewAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
+                    );
+                  } else {
+                    const config = getDefenseEventConfig(event.defenseRound);
+                    return (
+                      <div
+                        key={`defense-${event.id}-${index}`}
+                        className={`${config.bg} ${config.border} border-l-4 rounded-lg p-4 hover:shadow-md transition-all cursor-pointer`}
+                        onClick={() => setSelectedDate(new Date(event.defenseDate))}
+                      >
+                        <div className="flex items-start space-x-3">
+                          <div className={config.text}>
+                            {config.icon}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-1">
+                              <h3 className="font-semibold text-gray-900 text-sm">
+                                {config.label}
+                              </h3>
+                              <span className={`text-xs px-2 py-1 rounded ${config.bg} ${config.text} font-medium`}>
+                                {event.councilRole}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-600 mb-1">
+                              {event.proposalCode || `#${event.id}`}
+                            </p>
+                            <p className="text-sm text-gray-800 font-medium mb-2">{event.proposalTitle}</p>
+                            <p className="text-xs text-indigo-600 font-medium mb-2">🏛️ {event.councilName}</p>
+                            <div className="flex flex-wrap items-center text-xs text-gray-500 gap-2">
+                              <span className="flex items-center">
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                {formatDate(event.defenseDate)}
+                              </span>
+                              <span className="flex items-center">
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                {event.startTime.substring(0, 5)} - {event.endTime.substring(0, 5)}
+                              </span>
+                              <span className="flex items-center">
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                </svg>
+                                {event.room}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
                 })
               )}
             </div>

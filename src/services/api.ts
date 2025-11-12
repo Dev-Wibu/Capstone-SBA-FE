@@ -242,11 +242,29 @@ export const checkDuplicateProposal = async (proposalId: number): Promise<{
 };
 
 // ===== Lecturer APIs =====
+// Cache cho lecturers để tránh gọi API nhiều lần
+let lecturersCache: { data: Lecturer[] | null; timestamp: number } = {
+  data: null,
+  timestamp: 0
+};
+const CACHE_DURATION = 5 * 60 * 1000; // 5 phút
+
 /**
- * Lấy danh sách tất cả lecturers
+ * Lấy danh sách tất cả lecturers (có cache)
  */
-export const getLecturers = async (): Promise<Lecturer[]> => {
+export const getLecturers = async (forceRefresh = false): Promise<Lecturer[]> => {
+  const now = Date.now();
+  
+  // Sử dụng cache nếu còn hiệu lực và không force refresh
+  if (!forceRefresh && lecturersCache.data && (now - lecturersCache.timestamp) < CACHE_DURATION) {
+    return lecturersCache.data;
+  }
+  
   const response = await api.get<Lecturer[]>('/api/lecturers');
+  lecturersCache = {
+    data: response.data,
+    timestamp: now
+  };
   return response.data;
 };
 
@@ -263,6 +281,25 @@ export const getLecturerById = async (id: number): Promise<Lecturer> => {
  */
 export const getLecturerByCode = async (code: string): Promise<Lecturer> => {
   const response = await api.get<Lecturer>(`/api/lecturers/by-code/${code}`);
+  return response.data;
+};
+
+/**
+ * Tạo tài khoản lecturer mới
+ */
+export const createLecturer = async (data: {
+  password: string;
+  email: string;
+  fullName: string;
+  phoneNumber: string;
+  role: 'ADMIN' | 'MENTOR' | 'LECTURER';
+  status: boolean;
+  lecturerCode: string;
+}): Promise<Lecturer> => {
+  const response = await api.post<Lecturer>('/api/lecturers', {
+    id: 0,
+    ...data
+  });
   return response.data;
 };
 
@@ -393,6 +430,7 @@ export const deleteCouncil = async (id: number): Promise<void> => {
 export const createSchedule = async (data: {
   capstoneProjectId: number;
   councilId: number;
+  defenseRound: number;
   defenseDate: string;
   startTime: string;
   endTime: string;
@@ -407,5 +445,70 @@ export const createSchedule = async (data: {
  */
 export const getSchedules = async (): Promise<any[]> => {
   const response = await api.get('/api/schedules');
+  return response.data;
+};
+
+// ===== President/Council APIs =====
+/**
+ * Lấy danh sách đồ án cần chấm của council (status = DEFENSE hoặc SECOND_DEFENSE)
+ * Trả về cả schedule info để có scheduleId khi chấm điểm
+ * @param councilId ID của council
+ */
+export const getDefenseProposalsByCouncil = async (councilId: number): Promise<any[]> => {
+  try {
+    const allSchedules = await getSchedules();
+    
+    const councilDefenseSchedules = allSchedules.filter(
+      (schedule: any) => 
+        schedule.council?.id === councilId && 
+        (schedule.capstoneProposal?.status === 'DEFENSE' || 
+         schedule.capstoneProposal?.status === 'SECOND_DEFENSE')
+    );
+    
+    return councilDefenseSchedules;
+  } catch (error) {
+    console.error('❌ Error fetching defense proposals:', error);
+    return [];
+  }
+};
+
+/**
+ * Submit điểm Pass/Failed cho đồ án (Defense Result)
+ * @param scheduleId ID của schedule
+ * @param status "PASS" hoặc "FAIL"
+ * @param score Điểm số (0.1 - 10.0)
+ * @param comments Nhận xét (optional)
+ */
+export const gradeDefenseProposal = async (
+  scheduleId: number,
+  status: 'PASS' | 'FAIL',
+  score: number,
+  comments?: string
+): Promise<void> => {
+  const payload = {
+    scheduleId,
+    status,
+    score,
+    comments: comments || ''
+  };
+  
+  const response = await api.post('/api/defense-results', payload);
+  return response.data;
+};
+
+/**
+ * Lấy kết quả chấm điểm defense theo proposalId
+ * @param proposalId ID của proposal
+ */
+export const getDefenseResultsByProposal = async (proposalId: number): Promise<any[]> => {
+  const response = await api.get(`/api/defense-results/proposal/${proposalId}`);
+  return response.data;
+};
+
+/**
+ * Lấy tất cả kết quả chấm điểm defense
+ */
+export const getAllDefenseResults = async (): Promise<any[]> => {
+  const response = await api.get('/api/defense-results');
   return response.data;
 };

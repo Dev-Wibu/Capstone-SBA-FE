@@ -54,50 +54,19 @@ const ReviewBoardPage = () => {
         setIsReviewerMember(position !== null);
         setReviewerPosition(position);
 
-        // Nếu là reviewer, filter proposals thuộc semester hiện tại
         if (position !== null) {
-          console.log('=== DEBUG REVIEW BOARD ===');
-          console.log('User lecturerCode:', lecturerCode);
-          console.log('Reviewer position:', position);
-          console.log('Total proposals:', proposalsData.length);
-          console.log('Current semester ID:', current.id);
-          
           const filtered = proposalsData.filter(p => {
-            console.log(`\n--- Proposal ${p.id}: ${p.title} ---`);
-            console.log('Semester ID:', p.semester?.id, 'vs', current.id);
-            console.log('Status:', p.status);
-            
             if (p.semester?.id !== current.id) {
-              console.log('❌ Wrong semester');
               return false;
             }
             
-            // Hiển thị proposals từ DUPLICATE_ACCEPTED trở đi (đã qua kiểm tra trùng lặp)
             const validStatuses = ['DUPLICATE_ACCEPTED', 'REVIEW_1', 'REVIEW_2', 'REVIEW_3', 'DEFENSE', 'SECOND_DEFENSE', 'COMPLETED'];
             if (!validStatuses.includes(p.status)) {
-              console.log('❌ Not in valid status for review');
               return false;
             }
-            
-            // Đếm số reviewer đã approve/reject (khác null)
-            const approvedCount = [
-              p.isReviewerApprove1,
-              p.isReviewerApprove2,
-              p.isReviewerApprove3,
-              p.isReviewerApprove4
-            ].filter(status => status !== null).length;
-            
-            console.log('Approved count:', approvedCount);
-            console.log(`isReviewerApprove${position}:`, position === 1 ? p.isReviewerApprove1 : position === 2 ? p.isReviewerApprove2 : position === 3 ? p.isReviewerApprove3 : p.isReviewerApprove4);
-            console.log('✅ SHOW - User is reviewer', position);
             
             return true;
           });
-          
-          console.log('\n=== SUMMARY ===');
-          console.log('Total proposals:', proposalsData.length);
-          console.log('Filtered proposals:', filtered.length);
-          console.log('==================\n');
           
           setProposals(filtered);
         }

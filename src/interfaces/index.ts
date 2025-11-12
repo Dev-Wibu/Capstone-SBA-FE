@@ -205,3 +205,31 @@ export interface ProposalHistoryEntry {
   func: string[];
   createdAt: string;
 }
+
+// Schedule Page interfaces
+export interface ReviewEvent {
+  id: number;
+  proposalTitle: string;
+  reviewTime: 1 | 2 | 3;
+  reviewAt: string;
+  lecturerCode: string;
+  type: 'my-proposal' | 'review-assigned';
+  status: string;
+  eventType: 'review';
+}
+
+export interface DefenseEvent {
+  id: number;
+  proposalTitle: string;
+  proposalCode: string | null;
+  defenseDate: string;
+  startTime: string;
+  endTime: string;
+  room: string;
+  councilName: string;
+  councilRole: string;
+  defenseRound: number | null;
+  eventType: 'defense';
+}
+
+export type CalendarEvent = ReviewEvent | DefenseEvent;

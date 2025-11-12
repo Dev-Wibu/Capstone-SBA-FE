@@ -18,6 +18,7 @@ interface Schedule {
     name: string;
   };
   defenseDate: string;
+  defenseRound?: number;
   startTime: string;
   endTime: string;
   room: string;
@@ -76,6 +77,7 @@ const DefenseSchedulePage = () => {
   const [scheduleForm, setScheduleForm] = useState({
     capstoneProjectId: 0,
     councilId: 0,
+    defenseRound: 1,
     defenseDate: '',
     startTime: '',
     endTime: '',
@@ -144,9 +146,38 @@ const DefenseSchedulePage = () => {
       );
       setSchedules(enrichedSchedules);
       
-      // Lọc các đồ án có status DEFENSE và chưa được xếp lịch
-      const scheduledProjectIds = new Set(schedulesData.map((s: any) => s.capstoneProposal.id));
-      const defenseProposals = proposalsData.filter((p: any) => p.status === 'DEFENSE' && !scheduledProjectIds.has(p.id));
+      // Lọc các đồ án có status DEFENSE hoặc SECOND_DEFENSE
+      // Logic: 
+      // - DEFENSE: chưa xếp lịch đợt 1 → hiển thị
+      // - SECOND_DEFENSE: chưa xếp lịch đợt 2 → hiển thị
+      
+      const defenseProposals = proposalsData.filter((p: any) => {
+        // Chỉ lọc đồ án có status DEFENSE hoặc SECOND_DEFENSE
+        if (p.status !== 'DEFENSE' && p.status !== 'SECOND_DEFENSE') {
+          return false;
+        }
+        
+        // Kiểm tra xem đồ án này đã có lịch cho đợt tương ứng chưa
+        if (p.status === 'DEFENSE') {
+          // Kiểm tra xem đã có lịch đợt 1 (defenseRound = 1 hoặc undefined/null) chưa
+          const hasRound1 = schedulesData.some((s: any) => 
+            s.capstoneProposal.id === p.id && (!s.defenseRound || s.defenseRound === 1)
+          );
+          
+          return !hasRound1;
+        }
+        
+        if (p.status === 'SECOND_DEFENSE') {
+          // Kiểm tra xem đã có lịch đợt 2 (defenseRound = 2) chưa
+          const hasRound2 = schedulesData.some((s: any) => 
+            s.capstoneProposal.id === p.id && s.defenseRound === 2
+          );
+          
+          return !hasRound2;
+        }
+        
+        return false;
+      });
       
       // Fetch lecturer IDs và names từ codes
       const defenseProjs = await Promise.all(
@@ -245,6 +276,7 @@ const DefenseSchedulePage = () => {
       setScheduleForm({
         capstoneProjectId: draggedProject.project.id,
         councilId: 0,
+        defenseRound: 1,
         defenseDate: date,
         startTime: startTime,
         endTime: endTime,
@@ -284,6 +316,7 @@ const DefenseSchedulePage = () => {
       setScheduleForm({
         capstoneProjectId: 0,
         councilId: 0,
+        defenseRound: 1,
         defenseDate: '',
         startTime: '',
         endTime: '',
@@ -416,6 +449,18 @@ const DefenseSchedulePage = () => {
                           return sDate === dateStr && sStart === slot.start && sEnd === slot.end;
                         });
                         
+                        // Xác định màu dựa trên defenseRound
+                        const isRound2 = scheduleInSlot?.defenseRound === 2;
+                        const scheduleColorClasses = isRound2 
+                          ? 'bg-orange-100 border-orange-400 hover:bg-orange-200' 
+                          : 'bg-indigo-100 border-indigo-400 hover:bg-indigo-200';
+                        const textColorClasses = isRound2
+                          ? 'text-orange-900 font-semibold'
+                          : 'text-indigo-900';
+                        const roomColorClasses = isRound2
+                          ? 'text-orange-700'
+                          : 'text-indigo-700';
+                        
                         return (
                           <div
                             key={dayIndex}
@@ -425,19 +470,20 @@ const DefenseSchedulePage = () => {
                             className={`
                               min-h-[80px] p-2 rounded-lg border-2 transition-all
                               ${isPast ? 'bg-gray-50 border-gray-200 cursor-not-allowed' : 'border-gray-200 hover:border-indigo-300 cursor-pointer'}
-                              ${scheduleInSlot ? 'bg-indigo-100 border-indigo-400 hover:bg-indigo-200 cursor-pointer' : 'bg-white'}
+                              ${scheduleInSlot ? `${scheduleColorClasses} cursor-pointer` : 'bg-white'}
                               ${!isPast && draggedProject ? 'hover:bg-indigo-50 hover:shadow-md' : ''}
                             `}
                           >
                             {scheduleInSlot && (
                               <div className="text-xs">
-                                <p className="font-semibold text-indigo-900 truncate mb-1" title={scheduleInSlot.capstoneProposal.title}>
+                                <p className={`font-semibold ${textColorClasses} truncate mb-1`} title={scheduleInSlot.capstoneProposal.title}>
                                   {scheduleInSlot.capstoneProposal.title.length > 20 
                                     ? scheduleInSlot.capstoneProposal.title.substring(0, 20) + '...'
                                     : scheduleInSlot.capstoneProposal.title
                                   }
                                 </p>
-                                <p className="text-indigo-700">📍 {scheduleInSlot.room}</p>
+                                {isRound2 && <p className="text-orange-600 font-bold text-[10px] mb-0.5">🔄 ĐỢT 2</p>}
+                                <p className={roomColorClasses}>📍 {scheduleInSlot.room}</p>
                               </div>
                             )}
                           </div>
@@ -453,7 +499,11 @@ const DefenseSchedulePage = () => {
             <div className="mt-6 pt-4 border-t flex flex-wrap gap-4 text-sm">
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-indigo-100 border-2 border-indigo-400 rounded"></div>
-                <span className="text-gray-600">Đã xếp lịch</span>
+                <span className="text-gray-600">Đợt 1 - Bảo vệ lần đầu</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-orange-100 border-2 border-orange-400 rounded"></div>
+                <span className="text-gray-600">Đợt 2 - Bảo vệ lại</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 bg-gray-50 border-2 border-gray-200 rounded"></div>
@@ -525,20 +575,39 @@ const DefenseSchedulePage = () => {
       {/* Schedule Form Modal */}
       {showScheduleForm && selectedProject && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full">
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-t-xl">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 rounded-t-xl sticky top-0 z-10">
               <h2 className="text-2xl font-bold">Hoàn tất xếp lịch</h2>
               <p className="text-indigo-100 mt-1">Chọn hội đồng và phòng cho đồ án</p>
             </div>
 
             <form onSubmit={handleSubmitSchedule} className="p-6 space-y-6">
               {/* Thông tin đồ án */}
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                 <p className="text-sm font-semibold text-gray-700 mb-1">Đồ án:</p>
                 <p className="font-bold text-gray-900">{selectedProject.title}</p>
                 {selectedProject.studentName && (
                   <p className="text-sm text-gray-600 mt-1">Sinh viên: {selectedProject.studentName}</p>
                 )}
+              </div>
+
+              {/* Đợt bảo vệ */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Đợt bảo vệ <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={scheduleForm.defenseRound}
+                  onChange={(e) => setScheduleForm({ ...scheduleForm, defenseRound: Number(e.target.value) })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  required
+                >
+                  <option value={1}>Đợt 1 - Bảo vệ lần đầu</option>
+                  <option value={2}>Đợt 2 - Bảo vệ lại</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Chọn đợt 1 cho lần bảo vệ đầu tiên, đợt 2 cho lần bảo vệ lại
+                </p>
               </div>
 
               {/* Ngày và giờ */}
@@ -639,6 +708,7 @@ const DefenseSchedulePage = () => {
                     setScheduleForm({
                       capstoneProjectId: 0,
                       councilId: 0,
+                      defenseRound: 1,
                       defenseDate: '',
                       startTime: '',
                       endTime: '',

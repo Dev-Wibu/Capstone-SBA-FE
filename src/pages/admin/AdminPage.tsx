@@ -9,6 +9,7 @@ import AddSemesterModal from '../../components/AddSemesterModal';
 import ReviewBoardModal from '../../components/ReviewBoardModal';
 import ViewReviewBoardModal from '../../components/ViewReviewBoardModal';
 import ProposalDetailModal from '../../components/ProposalDetailModal';
+import CreateLecturerModal from '../../components/CreateLecturerModal';
 
 const AdminPage = () => {
   const { user } = useAuth();
@@ -42,6 +43,9 @@ const AdminPage = () => {
   
   // View review board modal
   const [showViewReviewBoardModal, setShowViewReviewBoardModal] = useState(false);
+
+  // Create lecturer modal
+  const [showCreateLecturerModal, setShowCreateLecturerModal] = useState(false);
 
   // Fetch proposals từ API
   useEffect(() => {
@@ -188,6 +192,13 @@ const AdminPage = () => {
             Quản lý tất cả đề tài
           </h1>
           <div className="flex gap-2">
+            <button
+              onClick={() => setShowCreateLecturerModal(true)}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center gap-2"
+            >
+              <span>➕</span>
+              <span>Tạo tài khoản</span>
+            </button>
             <button
               onClick={() => setShowAddSemesterModal(true)}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center gap-2"
@@ -489,6 +500,17 @@ const AdminPage = () => {
       <ViewReviewBoardModal
         isOpen={showViewReviewBoardModal}
         onClose={() => setShowViewReviewBoardModal(false)}
+      />
+
+      {/* Create Lecturer Modal */}
+      <CreateLecturerModal
+        isOpen={showCreateLecturerModal}
+        onClose={() => setShowCreateLecturerModal(false)}
+        onSuccess={() => {
+          setShowCreateLecturerModal(false);
+          toast.success('Tạo tài khoản thành công!');
+          fetchProposals(); // Refresh để cập nhật danh sách nếu cần
+        }}
       />
     </div>
   );
