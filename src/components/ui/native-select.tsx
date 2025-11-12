@@ -1,7 +1,7 @@
 import { ChevronDownIcon } from "lucide-react";
 import * as React from "react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/utils/utils";
 
 function NativeSelect({ className, ...props }: React.ComponentProps<"select">) {
   return (
@@ -36,3 +36,4 @@ function NativeSelectOptGroup({ className, ...props }: React.ComponentProps<"opt
 }
 
 export { NativeSelect, NativeSelectOptGroup, NativeSelectOption };
+
